@@ -1,0 +1,22 @@
+# Local IDE / build state
+*.iml
+.gradle/
+.kotlin/
+.idea/
+**/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+local.properties
+.DS_Store
+*.log
+
+# Local credentials / signing
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+keystore.properties
+secrets.properties
+.aws/
