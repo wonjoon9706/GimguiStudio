@@ -52,7 +52,8 @@
 - Git 2.45.1 설치와 커밋 작성자 설정 확인. 로컬 main 브랜치 초기화 및 origin 연결 완료.
 - 팀 저장소: https://github.com/wonjoon9706/GimguiStudio (연결 시 원격 브랜치 없음 확인).
 - 공유 범위: 앱 소스·테스트·문서·Gradle Wrapper/설정. 로컬 SDK 경로·캐시·서명키 제외.
-- .gitattributes로 Gradle 실행 스크립트 LF 및 Windows 배치 CRLF 지정. 업로드 결과는 Git 원격 refs/상태와 세션 최종 보고로 확인한다.
+- .gitattributes로 Gradle 실행 스크립트 LF 및 Windows 배치 CRLF 지정.
+- 2026-11-11 초기 커밋 6760947을 origin/main에 push 완료. 원격 main과 로컬 HEAD 일치 및 작업 트리 정리 확인. 이후 기능 작업은 브랜치/PR 방식으로 진행한다.
 
 ## 오디오 정책 반영 (2026-11-10)
 - Pleos 공식 Music/Audio·오디오 포커스·주행 제한·묵음 가이드 조사. 공모전 별도 원문은 미확보.
