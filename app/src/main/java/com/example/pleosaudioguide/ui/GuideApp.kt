@@ -62,7 +62,9 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
                     AppTab.HOME -> HomeScreen(
                         destinationName = navigation.destination?.name,
                         destinationStatus = navigation.status,
-                        recommendations = ContentRecommender.recommend(navigation.destination),
+                        recommendations = (model.odiiState.contents +
+                            ContentRecommender.recommend(navigation.destination)).distinctBy { it.id },
+                        onlineStatus = model.odiiState.status,
                         episodes = ContentCatalog.all,
                         resumeContent = model.resumeContent.takeIf { !model.isPlaying && !model.preparing },
                         canPlay = canPlay,

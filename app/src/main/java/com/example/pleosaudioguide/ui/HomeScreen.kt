@@ -34,7 +34,8 @@ fun HomeScreen(
     onRefresh: () -> Unit,
     onResume: () -> Unit,
     onPlay: (List<AudioContent>, Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onlineStatus: String? = null
 ) {
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(28.dp)) {
@@ -47,6 +48,10 @@ fun HomeScreen(
         item {
             SectionHeading("목적지 기반 팟캐스트 추천",
                 destinationName?.let { "$it 가는 길, 함께 들을 이야기" } ?: "목적지를 설정하면 관련 이야기를 추천해요")
+            onlineStatus?.let {
+                Text(it, Modifier.padding(start = 24.dp, end = 24.dp, bottom = 12.dp),
+                    style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+            }
             if (recommendations.isEmpty()) {
                 Surface(Modifier.padding(horizontal = 24.dp).fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp), color = Color(0xFFF0F0EE)) {
@@ -136,6 +141,7 @@ private fun EpisodeTile(content: AudioContent, enabled: Boolean, modifier: Modif
             CoverArt(Modifier.fillMaxWidth().height(120.dp))
             Text(content.title, fontWeight = FontWeight.Bold, minLines = 2)
             Text("${content.category} · 약 ${content.estimatedSeconds}초", style = MaterialTheme.typography.bodySmall)
+            content.credit?.let { Text("출처: $it", style = MaterialTheme.typography.labelSmall, color = Color.Gray) }
             TextButton(onClick = onClick, enabled = enabled) { Text("듣기  ›") }
         }
     }

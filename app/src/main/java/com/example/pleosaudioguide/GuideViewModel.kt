@@ -12,12 +12,22 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/** 오디 API 조회 상태. 실패를 시연 데이터로 대체하지 않고 그대로 표시한다. */
+data class OdiiState(val status: String? = null, val loading: Boolean = false, val contents: List<AudioContent> = emptyList())
+
+private fun findContent(id: String?) = ContentCatalog.all.find { it.id == id } ?: OdiiStore.find(id)
 
 class GuideViewModel(application: Application) : AndroidViewModel(application) {
     private val bookmarks = application.getSharedPreferences("playback_bookmark", 0)
-    var resumeContent by mutableStateOf(ContentCatalog.all.find { it.id == bookmarks.getString("id", null) })
+    var resumeContent by mutableStateOf(findContent(bookmarks.getString("id", null)))
         private set
     var hasCurrentAudio by mutableStateOf(false)
         private set
@@ -25,6 +35,9 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
     private var lastBookmarkSecond = -1L
     private val navigation = NavigationSource(application)
     val navigationState = navigation.state
+    var odiiState by mutableStateOf(OdiiState())
+        private set
+    private var odiiJob: Job? = null
     var audioStatus by mutableStateOf("시연 음성 엔진 준비 중")
         private set
     var voiceReady by mutableStateOf(false)
@@ -106,6 +119,9 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
             }
         }, ContextCompat.getMainExecutor(application))
         viewModelScope.launch {
+            navigation.state.map { it.destination }.distinctUntilChanged().collect(::loadOdiiStories)
+        }
+        viewModelScope.launch {
             while (true) {
                 updatePlayer()
                 delay(500)
@@ -115,14 +131,42 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshDestination() = navigation.refresh()
 
+    /** 목적지 주변 오디 이야기를 조회한다. 결과는 추천 목록만 갱신하고 재생 큐는 바꾸지 않는다. */
+    private fun loadOdiiStories(destination: GuideDestination?) {
+        odiiJob?.cancel()
+        if (destination == null) { odiiState = OdiiState(); return }
+        odiiState = OdiiState("오디 주변 이야기 조회 중", loading = true)
+        odiiJob = viewModelScope.launch {
+            odiiState = try {
+                val result = withContext(Dispatchers.IO) {
+                    val key = BuildConfig.ODII_SERVICE_KEY
+                    val near = if (destination.latitude != 0.0 || destination.longitude != 0.0)
+                        OdiiApi.storiesNear(key, destination.latitude, destination.longitude) else null
+                    if (near?.contents?.isNotEmpty() == true || destination.name.isBlank()) near
+                    else OdiiApi.storiesByKeyword(key, destination.name)
+                }
+                val contents = result?.contents.orEmpty()
+                OdiiStore.remember(contents)
+                val skipped = result?.skippedNoAudio?.takeIf { it > 0 }?.let { " · 음원 없음/비https ${it}건 제외" }.orEmpty()
+                OdiiState(if (contents.isEmpty()) "오디: 주변 이야기 없음$skipped"
+                    else "${OdiiApi.CREDIT} 실제 API ${contents.size}건$skipped", contents = contents)
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                OdiiState("오디 조회 실패: ${error.message}")
+            }
+        }
+    }
+
     fun play(contents: List<AudioContent>, index: Int = 0, startPositionMs: Long = 0) {
         if (contents.isEmpty() || index !in contents.indices || preparing || !playerReady || !voiceReady) return
         if (nativeActive) return
         usingPleosVoice = contents[index].audioUri == null
         if (usingPleosVoice) {
             controller?.pause()
-            nativeQueue = contents
-            nativeIndex = index
+            // TTS 큐에는 음원이 없는 원고만 넣는다(등록 음원은 Media3 경로).
+            nativeQueue = contents.filter { it.audioUri == null }
+            nativeIndex = nativeQueue.indexOf(contents[index])
             startNative()
             return
         }
@@ -212,7 +256,7 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
             val second = positionMs / 5000
             if (it.playbackState != Player.STATE_ENDED && it.mediaItemCount > 0 && second != lastBookmarkSecond) {
                 lastBookmarkSecond = second
-                ContentCatalog.all.find { content -> content.id == it.currentMediaItem?.mediaId }
+                findContent(it.currentMediaItem?.mediaId)
                     ?.let { content -> saveBookmark(content, positionMs) }
             }
         }

@@ -38,6 +38,16 @@
   - 검색·필터·레이아웃은 이 파일 안에서 확장한다. 공용 EpisodeRow는 HomeScreen.kt에 있다.
 - 프레임 파일은 ui/GuideApp.kt, 홈 콘텐츠는 ui/HomeScreen.kt. 탐색 작업은 이 파일들을 수정하지 않아도 된다.
 
+## 오디(Odii) 공공데이터 음원 연동 (2026-11-11, 1단계)
+- 출처: 한국관광공사_관광지 오디오 가이드정보_GW (data.go.kr 15101971), `https://apis.data.go.kr/B551011/Odii`. 무료, 이용허락범위 제한 없음(포털 표기). 음원별 공공누리 유형은 실제 응답으로 확인 필요.
+- 흐름: 내비 목적지 좌표 → storyLocationBasedList(mapX=경도, mapY=위도, radius 5000m). 결과 없음/좌표 없음이면 목적지 이름으로 storySearchList.
+- OdiiApi(HTTP+org.json) → OdiiParser(응답→AudioContent, https 음원만) → OdiiStore(프로세스 메모리). GuideViewModel이 목적지 변경 시 조회하고, 홈 추천에 오디 결과를 직접 등록 추천 앞에 합친다. 재생 큐는 자동 교체하지 않는다.
+- GuidePlaybackService는 OdiiStore 항목을 시스템 브라우저에 노출하고, 등록된 ID만 재생하는 규칙을 유지한다. 오디 콘텐츠는 출처를 아티스트/홈 카드에 표시한다.
+- AudioContent에 기본값 null인 credit, imageUri 필드를 추가했다(기존 호출 호환). 탐색 담당자와 공유 필요.
+- 인증키는 local.properties ODII_SERVICE_KEY → BuildConfig. APK에서 추출 가능하므로 제출용은 별도 검토.
+- 실패·0건은 상태 문구로 표시하며 시연 데이터로 대체하지 않는다.
+- 2026-11-11 실제 응답 확인: storyLocationBasedList 항목 필드 audioTitle, audioUrl, createdtime, imageUrl, langCode, mapX, mapY, modifiedtime, playTime, script, stid, stlid, tid, title, tlid. 파서가 사용하는 필드명과 일치. storySearchList(키워드 보조 검색) 실제 호출과 playTime 단위는 미확인.
+
 ## 오디오 심사 정책
 - 공식 Music/Audio 정책을 기준으로 팟캐스트 유형과 MBS 호환 MediaLibraryService로 개발한다. Manifest 오디오 카테고리·런처 메타데이터를 반영했다.
 - 홈/탐색 화면 계약은 유지한다. 등록 음원만 시스템 브라우저에서 재생 가능하게 제공하고, 별도 TTS 시연을 표준 미디어 재생 준수로 간주하지 않는다.
