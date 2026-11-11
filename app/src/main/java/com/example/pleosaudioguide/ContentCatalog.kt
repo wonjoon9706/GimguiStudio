@@ -7,7 +7,10 @@ data class AudioContent(
     val placeTags: List<String>,
     val script: String,
     val estimatedSeconds: Int,
-    val audioUri: String? = null
+    val audioUri: String? = null,
+    // 외부 공공데이터 콘텐츠의 출처 표기와 대표 이미지. 직접 등록 시연 콘텐츠는 null.
+    val credit: String? = null,
+    val imageUri: String? = null
 )
 
 data class GuideDestination(

@@ -18,8 +18,9 @@ import com.google.common.util.concurrent.ListenableFuture
 /** 차량의 표준 브라우저에 팟캐스트 > 학습 카테고리 > 등록 음원을 제공한다. */
 class GuidePlaybackService : MediaLibraryService() {
     private var session: MediaLibrarySession? = null
-    private val playableContents get() = ContentCatalog.all.filter { it.audioUri != null }
-    private val categories get() = ContentCatalog.all.map { it.category }.distinct()
+    // 직접 등록 음원 + 이번 프로세스에서 앱이 조회한 오디 음원만 노출한다.
+    private val playableContents get() = ContentCatalog.all.filter { it.audioUri != null } + OdiiStore.all
+    private val categories get() = (ContentCatalog.all + OdiiStore.all).map { it.category }.distinct()
     private val artwork get() = Uri.parse("android.resource://$packageName/${R.mipmap.ic_launcher}")
 
     private fun folder(id: String, title: String) = MediaItem.Builder().setMediaId(id)
@@ -29,9 +30,9 @@ class GuidePlaybackService : MediaLibraryService() {
 
     private fun episode(content: AudioContent) = NarrationAudio.mediaItems(listOf(content)).single()
         .buildUpon().setMediaMetadata(MediaMetadata.Builder().setTitle(content.title)
-            .setArtist("POTQUEST").setGenre(content.category).setIsBrowsable(false)
+            .setArtist(content.credit ?: "POTQUEST").setGenre(content.category).setIsBrowsable(false)
             .setIsPlayable(true).setMediaType(MediaMetadata.MEDIA_TYPE_PODCAST_EPISODE)
-            .setArtworkUri(artwork).build()).build()
+            .setArtworkUri(content.imageUri?.let(Uri::parse) ?: artwork).build()).build()
 
     private fun page(items: List<MediaItem>, page: Int, pageSize: Int): List<MediaItem> {
         if (page < 0 || pageSize <= 0) return emptyList()

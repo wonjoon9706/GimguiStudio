@@ -15,6 +15,12 @@
 - 마지막 콘텐츠 ID·음원 위치 저장/완료 시 제거. TTS는 '처음부터 다시 듣기' 안내.
 - 탐색 팀원 작업용 ExploreScreen.kt 분리 및 목록/재생 콜백 연결. 퀘스트·보관함·MY POT은 준비 화면.
 
+## 오디(Odii) 연동 1단계 (2026-11-11, 브랜치 feature/odii-audio)
+- INTERNET 권한, ODII_SERVICE_KEY BuildConfig, OdiiApi/OdiiParser/OdiiStore 추가. 목적지 변경 시 주변 이야기 조회 → 홈 추천에 합침 → Media3 재생 경로로 전달. 시스템 브라우저에도 노출.
+- 직접 수행: macOS에서 assembleDebug 성공, 단위 테스트 9개 성공(OdiiParser 4개 추가, 테스트용 가정 응답 사용). connectedDebugAndroidTest 5개 성공(emulator-5554). 설치·실행 시 크래시 없음, 목적지 미설정 상태 표시 확인.
+- 실제 키 검증(2026-11-11): 서울 목적지(경도 126.97939722, 위도 37.57668888)로 storyLocationBasedList 호출 성공, 응답 필드가 파서 필드명과 일치함을 로그로 확인. 사용자 보고로 오디 음원 재생 확인.
+- 미검증: storySearchList 키워드 보조 검색 실제 호출, playTime 단위, 진행률·일시정지·이전/다음 세부 동작, 이미지 표시, 프로세스 재시작 후 오디 이어듣기(메모리 보관이라 현재 불가), 차량 키·오디오 포커스.
+
 ## 런처 표시 / 팀원 시연 (2026-11-11)
 - 앱 표시 이름을 PleosAudioGuide에서 POTQUEST로 통일. 패키지는 동일하게 유지.
 - installDebug 빌드·설치 성공. Pleos 앱 목록의 POTQUEST 이름과 해당 아이콘을 눌러 홈 실행 확인.
@@ -71,6 +77,7 @@
 - 상세 근거와 잔여 작업: docs/AUDIO_POLICY.md. 이번 변경은 정책 대응 1단계이며 전체 심사 준수 완료가 아님.
 
 ## 다음 작업
+- 오디: 키워드 보조 검색·playTime 단위 확인, 이어듣기를 위한 조회 결과 보관 방식 결정, 탐색 화면에 오디 콘텐츠 노출 여부 합의.
 0. 제출용 음원/Player 경로 통합 및 AUDIO_POLICY.md의 미충족 항목을 우선 해결한다.
 1. 내비 화면과 remainTime을 비교해 단위·갱신 방식 검증.
 2. 목적지 변경·취소·없음, 다른 앱 전환 시나리오와 일반 콘텐츠 독립 재생 검증.
