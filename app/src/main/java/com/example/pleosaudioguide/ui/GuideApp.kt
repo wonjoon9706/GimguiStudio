@@ -1,7 +1,10 @@
 package com.example.pleosaudioguide.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -28,13 +31,20 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
     var selectedName by rememberSaveable { mutableStateOf(AppTab.HOME.name) }
     val selected = AppTab.valueOf(selectedName)
     var collectionName by rememberSaveable { mutableStateOf<String?>(null) }
+    var playerVisible by rememberSaveable { mutableStateOf(false) }
+    val closePlayer = {
+        playerVisible = false
+        selectedName = AppTab.HOME.name
+        collectionName = null
+    }
     val savedScreens = rememberSaveableStateHolder()
     val savedHomeScreens = rememberSaveableStateHolder()
     val navigation by model.navigationState.collectAsState()
     val canPlay = model.voiceReady && model.playerReady && !model.preparing &&
         !(model.usingPleosVoice && model.isPlaying)
-    BackHandler(selected != AppTab.HOME || collectionName != null) {
-        if (selected == AppTab.HOME) collectionName = null
+    BackHandler(playerVisible || selected != AppTab.HOME || collectionName != null) {
+        if (playerVisible) closePlayer()
+        else if (selected == AppTab.HOME) collectionName = null
         else selectedName = AppTab.HOME.name
     }
     val recommendations = (model.odiiState.contents +
@@ -48,12 +58,13 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
         Scaffold(
             bottomBar = {
                 Column {
-                    if (model.hasCurrentAudio) MiniPlayer(model)
+                    if (model.hasCurrentAudio && !playerVisible) MiniPlayer(model) { playerVisible = true }
                     NavigationBar(containerColor = Color.White) {
                         AppTab.entries.forEach { tab ->
                             NavigationBarItem(
                                 selected = selected == tab,
                                 onClick = {
+                                    playerVisible = false
                                     selectedName = tab.name
                                     if (tab == AppTab.HOME) collectionName = null
                                 },
@@ -66,7 +77,25 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
                 }
             }
         ) { padding ->
-            savedScreens.SaveableStateProvider(selectedName) {
+            if (playerVisible) {
+                AudioPlayerScreen(
+                    queue = model.playbackQueue,
+                    currentContentId = model.currentContentId,
+                    hasCurrentAudio = model.hasCurrentAudio,
+                    isPlaying = model.isPlaying,
+                    positionMs = model.positionMs,
+                    durationMs = model.durationMs,
+                    canSeek = model.canSeek,
+                    preparing = model.preparing,
+                    usingPleosVoice = model.usingPleosVoice,
+                    onBack = closePlayer,
+                    onTogglePlayback = model::togglePlayback,
+                    onSeek30 = model::seekBy30Seconds,
+                    onSeekTo = model::seekToPosition,
+                    onSelectContent = model::selectPlaybackContent,
+                    modifier = Modifier.fillMaxSize().padding(padding)
+                )
+            } else savedScreens.SaveableStateProvider(selectedName) {
                 val screenModifier = Modifier.fillMaxSize().padding(padding)
                 when (selected) {
                     AppTab.HOME -> savedHomeScreens.SaveableStateProvider(
@@ -118,7 +147,7 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
 }
 
 @Composable
-private fun MiniPlayer(model: GuideViewModel) {
+private fun MiniPlayer(model: GuideViewModel, onOpenPlayer: () -> Unit) {
     Surface(color = Color(0xFFEEEEEB), tonalElevation = 2.dp) {
         Column {
             if (!model.usingPleosVoice && model.durationMs > 0) {
@@ -130,7 +159,8 @@ private fun MiniPlayer(model: GuideViewModel) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CoverArt(Modifier.size(48.dp))
+                EpisodeArtwork(model.currentContent, Modifier.size(48.dp)
+                    .clickable(onClick = onOpenPlayer).semantics { contentDescription = "전체 재생 화면 열기" })
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(model.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)
                     Text(if (model.usingPleosVoice) "시연 음성 · 중지 후 처음부터 재생"
