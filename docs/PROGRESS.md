@@ -15,6 +15,11 @@
 - 마지막 콘텐츠 ID·음원 위치 저장/완료 시 제거. TTS는 '처음부터 다시 듣기' 안내.
 - 탐색 팀원 작업용 ExploreScreen.kt 분리 및 목록/재생 콜백 연결. 퀘스트·보관함·MY POT은 준비 화면.
 
+## 런처 표시 / 팀원 시연 (2026-11-11)
+- 앱 표시 이름을 PleosAudioGuide에서 POTQUEST로 통일. 패키지는 동일하게 유지.
+- installDebug 빌드·설치 성공. Pleos 앱 목록의 POTQUEST 이름과 해당 아이콘을 눌러 홈 실행 확인.
+- 팀원은 최신 main을 받은 뒤 Run/installDebug로 설치해야 한다. Git push만으로 기기 설치는 수행되지 않는다.
+
 ## 직접 수행한 검증
 2026-11-10 홈/탐색 변경:
 - assembleDebug 성공, 단위 테스트 5개 성공.

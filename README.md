@@ -7,7 +7,14 @@
 2. 필요한 Android SDK를 설치하고 Gradle Sync를 실행한다. SDK 경로는 각 PC의 local.properties에 설정하며 공유하지 않는다.
 3. 빌드 설정: minSdk 28, compileSdk/targetSdk 37, AGP 9.5.1, Gradle 9.6.0. Gradle JDK는 Android Studio에서 프로젝트 요구 버전에 맞게 설정한다(Java 소스/타깃 11과 Gradle 실행 JDK는 별개).
 4. 실제 내비·음성 검증은 Pleos Connect v2.1.0 에뮬레이터에서 수행한다. Pleos Maven 저장소에 접근할 수 있어야 한다.
-5. 실행 구성을 app으로, 실행 장치를 Pleos 에뮬레이터로 선택하고 Run한다.
+5. 실행 구성을 app으로, 실행 장치를 Pleos 에뮬레이터로 선택하고 Run한다. 설치 후 기기 앱 목록에서 POTQUEST를 선택한다.
+6. Git push/pull만으로 기기에 앱이 설치되지는 않는다. 최신 main을 받은 뒤 Run 또는 아래 명령으로 설치한다.
+
+```powershell
+.\gradlew.bat :app:installDebug
+```
+
+기기 테스트가 끝난 뒤 앱이 제거됐으면 다시 Run/installDebug로 설치한다.
 
 Windows 빌드/테스트:
 ```powershell
