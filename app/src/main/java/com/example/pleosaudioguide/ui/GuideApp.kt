@@ -27,11 +27,18 @@ private enum class AppTab(val label: String, val glyph: String) {
 fun GuideApp(model: GuideViewModel = viewModel()) {
     var selectedName by rememberSaveable { mutableStateOf(AppTab.HOME.name) }
     val selected = AppTab.valueOf(selectedName)
+    var collectionName by rememberSaveable { mutableStateOf<String?>(null) }
     val savedScreens = rememberSaveableStateHolder()
+    val savedHomeScreens = rememberSaveableStateHolder()
     val navigation by model.navigationState.collectAsState()
     val canPlay = model.voiceReady && model.playerReady && !model.preparing &&
         !(model.usingPleosVoice && model.isPlaying)
-    BackHandler(selected != AppTab.HOME) { selectedName = AppTab.HOME.name }
+    BackHandler(selected != AppTab.HOME || collectionName != null) {
+        if (selected == AppTab.HOME) collectionName = null
+        else selectedName = AppTab.HOME.name
+    }
+    val recommendations = (model.odiiState.contents +
+        ContentRecommender.recommend(navigation.destination)).distinctBy { it.id }
     MaterialTheme(colorScheme = lightColorScheme(
         primary = Color(0xFF30302E), onPrimary = Color.White,
         secondaryContainer = Color(0xFFE3E3DF), onSecondaryContainer = Color(0xFF222220),
@@ -46,7 +53,10 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
                         AppTab.entries.forEach { tab ->
                             NavigationBarItem(
                                 selected = selected == tab,
-                                onClick = { selectedName = tab.name },
+                                onClick = {
+                                    selectedName = tab.name
+                                    if (tab == AppTab.HOME) collectionName = null
+                                },
                                 icon = { Text(tab.glyph, fontSize = 26.sp) },
                                 label = { Text(tab.label) },
                                 alwaysShowLabel = true
@@ -59,21 +69,41 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
             savedScreens.SaveableStateProvider(selectedName) {
                 val screenModifier = Modifier.fillMaxSize().padding(padding)
                 when (selected) {
-                    AppTab.HOME -> HomeScreen(
-                        destinationName = navigation.destination?.name,
-                        destinationStatus = navigation.status,
-                        recommendations = (model.odiiState.contents +
-                            ContentRecommender.recommend(navigation.destination)).distinctBy { it.id },
-                        onlineStatus = model.odiiState.status,
-                        episodes = ContentCatalog.all,
-                        resumeContent = model.resumeContent.takeIf { !model.isPlaying && !model.preparing },
-                        canPlay = canPlay,
-                        canRefresh = navigation.connected,
-                        onRefresh = model::refreshDestination,
-                        onResume = model::resumeLast,
-                        onPlay = { queue, index -> model.play(queue, index) },
-                        modifier = screenModifier
-                    )
+                    AppTab.HOME -> savedHomeScreens.SaveableStateProvider(
+                        if (collectionName == null) "home" else "content-list"
+                    ) {
+                        if (collectionName != null) ContentListScreen(
+                            collection = ContentCollection.valueOf(collectionName!!),
+                            destinationName = navigation.destination?.name,
+                            destinationStatus = navigation.status,
+                            recommendations = recommendations,
+                            episodes = ContentCatalog.all,
+                            canPlay = canPlay,
+                            onSelectCollection = { collectionName = it.name },
+                            onBack = { collectionName = null },
+                            onPlay = { queue, index -> model.play(queue, index) },
+                            modifier = screenModifier,
+                            onlineStatus = model.odiiState.status,
+                            playbackQueue = model.playbackQueue,
+                            currentContentId = model.currentContentId,
+                            isPlaying = model.isPlaying,
+                            canReorder = model.playerReady && !model.preparing,
+                            onMoveItem = model::movePlaybackItem
+                        ) else HomeScreen(
+                            destinationName = navigation.destination?.name,
+                            destinationStatus = navigation.status,
+                            recommendations = recommendations,
+                            onlineStatus = model.odiiState.status,
+                            episodes = ContentCatalog.all,
+                            resumeContent = model.resumeContent.takeIf { !model.isPlaying && !model.preparing },
+                            canPlay = canPlay,
+                            canRefresh = navigation.connected,
+                            onRefresh = model::refreshDestination,
+                            onResume = model::resumeLast,
+                            onOpenCollection = { collectionName = it.name },
+                            modifier = screenModifier
+                        )
+                    }
                     AppTab.EXPLORE -> ExploreScreen(
                         contents = ContentCatalog.all, canPlay = canPlay,
                         onPlay = { queue, index -> model.play(queue, index) },

@@ -60,6 +60,10 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var usingPleosVoice by mutableStateOf(true)
         private set
+    var playbackQueue by mutableStateOf<List<AudioContent>>(emptyList())
+        private set
+    var currentContentId by mutableStateOf<String?>(null)
+        private set
     private var nativeQueue = emptyList<AudioContent>()
     private var nativeIndex = 0
     private var nativeActive = false
@@ -86,6 +90,7 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
             } else if (completed) {
                 clearBookmark()
                 hasCurrentAudio = false
+                currentContentId = null
                 audioStatus = "시연 음성 재생 완료"
             }
         })
@@ -182,6 +187,8 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun startNative() {
         val content = nativeQueue.getOrNull(nativeIndex) ?: return
+        playbackQueue = nativeQueue
+        currentContentId = content.id
         title = content.title
         positionMs = 0
         durationMs = 0
@@ -229,6 +236,26 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** 현재 항목을 다시 준비하거나 seek하지 않고 재생 큐의 순서만 옮긴다. */
+    fun movePlaybackItem(from: Int, to: Int) {
+        if (preparing || from !in playbackQueue.indices || to !in playbackQueue.indices || from == to) return
+        if (usingPleosVoice) {
+            val currentId = nativeQueue.getOrNull(nativeIndex)?.id ?: return
+            nativeQueue = PlaybackQueue.move(nativeQueue, from, to)
+            nativeIndex = nativeQueue.indexOfFirst { it.id == currentId }
+            playbackQueue = nativeQueue
+            hasPrevious = nativeIndex > 0
+            hasNext = nativeIndex < nativeQueue.lastIndex
+        } else {
+            controller?.let {
+                if (it.isCommandAvailable(Player.COMMAND_CHANGE_MEDIA_ITEMS)) {
+                    it.moveMediaItem(from, to)
+                    updatePlayer()
+                }
+            }
+        }
+    }
+
     fun resumeLast() {
         val content = resumeContent ?: return
         play(listOf(content), startPositionMs = bookmarks.getLong("position", 0))
@@ -247,6 +274,12 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
     private fun updatePlayer() {
         if (usingPleosVoice) return
         controller?.let {
+            playbackQueue = (0 until it.mediaItemCount).mapNotNull { index ->
+                findContent(it.getMediaItemAt(index).mediaId)
+            }
+            currentContentId = it.currentMediaItem?.mediaId.takeIf { _ ->
+                it.playbackState != Player.STATE_ENDED
+            }
             title = it.mediaMetadata.title?.toString().orEmpty()
             isPlaying = it.isPlaying
             positionMs = it.currentPosition.coerceAtLeast(0)

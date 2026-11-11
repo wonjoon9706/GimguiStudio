@@ -33,7 +33,7 @@ fun HomeScreen(
     canRefresh: Boolean,
     onRefresh: () -> Unit,
     onResume: () -> Unit,
-    onPlay: (List<AudioContent>, Int) -> Unit,
+    onOpenCollection: (ContentCollection) -> Unit,
     modifier: Modifier = Modifier,
     onlineStatus: String? = null
 ) {
@@ -47,7 +47,8 @@ fun HomeScreen(
         }
         item {
             SectionHeading("목적지 기반 팟캐스트 추천",
-                destinationName?.let { "$it 가는 길, 함께 들을 이야기" } ?: "목적지를 설정하면 관련 이야기를 추천해요")
+                destinationName?.let { "$it 가는 길, 함께 들을 이야기" } ?: "목적지를 설정하면 관련 이야기를 추천해요",
+                onClick = { onOpenCollection(ContentCollection.DESTINATION) })
             onlineStatus?.let {
                 Text(it, Modifier.padding(start = 24.dp, end = 24.dp, bottom = 12.dp),
                     style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
@@ -64,8 +65,8 @@ fun HomeScreen(
                 LazyRow(contentPadding = PaddingValues(horizontal = 24.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     items(recommendations, key = { it.id }) { content ->
-                        EpisodeTile(content, canPlay, Modifier.width(248.dp)) {
-                            onPlay(recommendations, recommendations.indexOf(content))
+                        EpisodeTile(content, Modifier.width(248.dp)) {
+                            onOpenCollection(ContentCollection.DESTINATION)
                         }
                     }
                 }
@@ -91,26 +92,38 @@ fun HomeScreen(
             }
         }
         item {
-            SectionHeading("오늘의 퀘스트", "이동 시간을 배움의 시간으로")
+            SectionHeading("오늘의 퀘스트", "이동 시간을 배움의 시간으로",
+                onClick = { onOpenCollection(ContentCollection.COMMUTE) })
             Row(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                QuestCard("DAILY", "출퇴근 퀘스트", "시사 · 교양 · 어학", Modifier.weight(1f))
-                QuestCard("TRIP", "가족 여행 퀘스트", "목적지 이야기 듣기", Modifier.weight(1f))
+                QuestCard("DAILY", "출퇴근 퀘스트", "상식 · 교양 · 어학", Modifier.weight(1f)) {
+                    onOpenCollection(ContentCollection.COMMUTE)
+                }
+                QuestCard("TRIP", "가족 여행 퀘스트", "관광 · 역사 · 여행 영어", Modifier.weight(1f)) {
+                    onOpenCollection(ContentCollection.TRIP)
+                }
             }
         }
-        item { SectionHeading("추천 에피소드", "오늘 함께 들을 짧은 이야기 · 시연 콘텐츠") }
+        item {
+            SectionHeading("추천 에피소드", "오늘 함께 들을 짧은 이야기 · 시연 콘텐츠",
+                onClick = { onOpenCollection(ContentCollection.RECOMMENDED) })
+        }
         items(episodes, key = { it.id }) { content ->
-            EpisodeRow(content, canPlay, Modifier.padding(horizontal = 24.dp)) {
-                onPlay(episodes, episodes.indexOf(content))
+            EpisodeRow(content, true, Modifier.padding(horizontal = 24.dp), actionLabel = "목록 보기") {
+                onOpenCollection(ContentCollection.RECOMMENDED)
             }
         }
     }
 }
 
 @Composable
-private fun SectionHeading(title: String, subtitle: String) {
+private fun SectionHeading(title: String, subtitle: String, onClick: (() -> Unit)? = null) {
     Column(Modifier.padding(start = 24.dp, end = 24.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, Modifier.weight(1f).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            if (onClick != null) TextButton(onClick = onClick) { Text("전체 보기") }
+        }
         Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = Color.DarkGray)
     }
 }
@@ -134,21 +147,22 @@ fun CoverArt(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun EpisodeTile(content: AudioContent, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun EpisodeTile(content: AudioContent, modifier: Modifier, onClick: () -> Unit) {
     Surface(modifier, shape = RoundedCornerShape(16.dp), color = Color(0xFFF0F0EE)) {
-        Column(Modifier.clickable(enabled = enabled, onClick = onClick).padding(12.dp),
+        Column(Modifier.clickable(onClick = onClick).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             CoverArt(Modifier.fillMaxWidth().height(120.dp))
             Text(content.title, fontWeight = FontWeight.Bold, minLines = 2)
             Text("${content.category} · 약 ${content.estimatedSeconds}초", style = MaterialTheme.typography.bodySmall)
             content.credit?.let { Text("출처: $it", style = MaterialTheme.typography.labelSmall, color = Color.Gray) }
-            TextButton(onClick = onClick, enabled = enabled) { Text("듣기  ›") }
+            TextButton(onClick = onClick) { Text("목록 보기  ›") }
         }
     }
 }
 
 @Composable
-fun EpisodeRow(content: AudioContent, enabled: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun EpisodeRow(content: AudioContent, enabled: Boolean, modifier: Modifier = Modifier,
+    actionLabel: String = "듣기", onClick: () -> Unit) {
     Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = Color(0xFFF0F0EE)) {
         Row(Modifier.clickable(enabled = enabled, onClick = onClick).padding(16.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -157,19 +171,19 @@ fun EpisodeRow(content: AudioContent, enabled: Boolean, modifier: Modifier = Mod
                 Text(content.title, fontWeight = FontWeight.SemiBold)
                 Text("${content.category} · 약 ${content.estimatedSeconds}초", style = MaterialTheme.typography.bodySmall)
             }
-            TextButton(onClick = onClick, enabled = enabled) { Text("듣기") }
+            TextButton(onClick = onClick, enabled = enabled) { Text(actionLabel) }
         }
     }
 }
 
 @Composable
-private fun QuestCard(tag: String, title: String, subtitle: String, modifier: Modifier) {
-    OutlinedCard(modifier) {
+private fun QuestCard(tag: String, title: String, subtitle: String, modifier: Modifier, onClick: () -> Unit) {
+    OutlinedCard(onClick = onClick, modifier = modifier) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(tag, style = MaterialTheme.typography.labelSmall, color = Color.DarkGray)
             Text(title, fontWeight = FontWeight.Bold)
             Text(subtitle, style = MaterialTheme.typography.bodySmall)
-            Text("준비 중", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+            Text("콘텐츠 고르기  ›", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
         }
     }
 }
