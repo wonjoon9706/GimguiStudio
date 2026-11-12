@@ -81,18 +81,21 @@ class AudioPlayerScreenTest {
         }
     }
 
-    @Test fun queueButtonShowsTheActualQueueAndSelectsById() {
+    @Test fun queueButtonRequestsNavigationWithoutSelectingOrPlayingContent() {
         val queue = ContentCatalog.all.take(2)
-        var selected: String? = null
+        var opens = 0
+        var selections = 0
         compose.setContent {
             MaterialTheme {
                 AudioPlayerScreen(queue, queue.first().id, true, false, 0, 120_000, true, false, false,
-                    {}, {}, {}, {}, { selected = it })
+                    {}, {}, {}, {}, { selections++ }, onShowQueue = { opens++ })
             }
         }
         compose.onNodeWithText("재생 목록 · 2개").performScrollTo().performClick()
-        compose.onNodeWithText(queue[1].title).performScrollTo().performClick()
-        compose.runOnIdle { assertEquals(queue[1].id, selected) }
+        compose.runOnIdle {
+            assertEquals(1, opens)
+            assertEquals(0, selections)
+        }
     }
 
     @Test fun singleEpisodeCannotSwipeAndUnsupportedSeekingIsDisabled() {

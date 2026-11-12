@@ -74,6 +74,18 @@ class PlayerIntegrationTest {
             compose.waitUntil(5_000) { abs(model.positionMs - 35_000) < 500 }
             compose.runOnIdle { assertFalse(controller.playWhenReady) }
 
+            compose.onNodeWithText("재생 목록 · 2개").performScrollTo().performClick()
+            compose.onNodeWithText("콘텐츠를 골라주세요").assertIsDisplayed()
+            compose.onNodeWithText("현재 재생 목록 · 2개").assertIsDisplayed()
+            compose.onNodeWithText("1번째 · 현재 항목").assertExists()
+            compose.onNodeWithText(queue[1].title).assertExists()
+            compose.runOnIdle {
+                assertFalse(controller.playWhenReady)
+                assertTrue(abs(controller.currentPosition - 35_000) < 500)
+                assertEquals(queue.map { it.id }, model.playbackQueue.map { it.id })
+            }
+            compose.onNodeWithContentDescription("전체 재생 화면 열기").performClick()
+
             compose.onNodeWithTag("playerArtworkCarousel").performScrollTo()
                 .performTouchInput { swipeLeft() }
             compose.waitUntil(5_000) { model.currentContentId == queue[1].id }
@@ -83,6 +95,13 @@ class PlayerIntegrationTest {
             }
             compose.onNodeWithContentDescription("재생").performScrollTo().performClick()
             compose.waitUntil(5_000) { model.isPlaying }
+            compose.onNodeWithText("재생 목록 · 2개").performScrollTo().performClick()
+            compose.onNodeWithText("콘텐츠를 골라주세요").assertIsDisplayed()
+            compose.runOnIdle {
+                assertTrue(model.isPlaying)
+                assertEquals(queue[1].id, controller.currentMediaItem?.mediaId)
+            }
+            compose.onNodeWithContentDescription("전체 재생 화면 열기").performClick()
             compose.onNodeWithText("‹ 홈으로").performScrollTo().performClick()
             compose.onNodeWithContentDescription("전체 재생 화면 열기").assertExists()
             compose.runOnIdle {

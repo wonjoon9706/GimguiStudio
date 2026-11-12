@@ -32,10 +32,13 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
     val selected = AppTab.valueOf(selectedName)
     var collectionName by rememberSaveable { mutableStateOf<String?>(null) }
     var playerVisible by rememberSaveable { mutableStateOf(false) }
+    var showingPlaybackQueue by rememberSaveable { mutableStateOf(false) }
+    var playbackCollectionName by rememberSaveable { mutableStateOf(ContentCollection.RECOMMENDED.name) }
     val closePlayer = {
         playerVisible = false
         selectedName = AppTab.HOME.name
         collectionName = null
+        showingPlaybackQueue = false
     }
     val savedScreens = rememberSaveableStateHolder()
     val savedHomeScreens = rememberSaveableStateHolder()
@@ -44,7 +47,10 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
         !(model.usingPleosVoice && model.isPlaying)
     BackHandler(playerVisible || selected != AppTab.HOME || collectionName != null) {
         if (playerVisible) closePlayer()
-        else if (selected == AppTab.HOME) collectionName = null
+        else if (selected == AppTab.HOME) {
+            collectionName = null
+            showingPlaybackQueue = false
+        }
         else selectedName = AppTab.HOME.name
     }
     val recommendations = (model.odiiState.contents +
@@ -66,7 +72,10 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
                                 onClick = {
                                     playerVisible = false
                                     selectedName = tab.name
-                                    if (tab == AppTab.HOME) collectionName = null
+                                    if (tab == AppTab.HOME) {
+                                        collectionName = null
+                                        showingPlaybackQueue = false
+                                    }
                                 },
                                 icon = { Text(tab.glyph, fontSize = 26.sp) },
                                 label = { Text(tab.label) },
@@ -93,7 +102,13 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
                     onSeek30 = model::seekBy30Seconds,
                     onSeekTo = model::seekToPosition,
                     onSelectContent = model::selectPlaybackContent,
-                    modifier = Modifier.fillMaxSize().padding(padding)
+                    modifier = Modifier.fillMaxSize().padding(padding),
+                    onShowQueue = {
+                        playerVisible = false
+                        selectedName = AppTab.HOME.name
+                        collectionName = playbackCollectionName
+                        showingPlaybackQueue = true
+                    }
                 )
             } else savedScreens.SaveableStateProvider(selectedName) {
                 val screenModifier = Modifier.fillMaxSize().padding(padding)
@@ -108,16 +123,26 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
                             recommendations = recommendations,
                             episodes = ContentCatalog.all,
                             canPlay = canPlay,
-                            onSelectCollection = { collectionName = it.name },
-                            onBack = { collectionName = null },
-                            onPlay = { queue, index -> model.play(queue, index) },
+                            onSelectCollection = {
+                                collectionName = it.name
+                                showingPlaybackQueue = false
+                            },
+                            onBack = {
+                                collectionName = null
+                                showingPlaybackQueue = false
+                            },
+                            onPlay = { queue, index ->
+                                playbackCollectionName = collectionName ?: ContentCollection.RECOMMENDED.name
+                                model.play(queue, index)
+                            },
                             modifier = screenModifier,
                             onlineStatus = model.odiiState.status,
                             playbackQueue = model.playbackQueue,
                             currentContentId = model.currentContentId,
                             isPlaying = model.isPlaying,
                             canReorder = model.playerReady && !model.preparing,
-                            onMoveItem = model::movePlaybackItem
+                            onMoveItem = model::movePlaybackItem,
+                            showPlaybackQueue = showingPlaybackQueue
                         ) else HomeScreen(
                             destinationName = navigation.destination?.name,
                             destinationStatus = navigation.status,
@@ -129,13 +154,19 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
                             canRefresh = navigation.connected,
                             onRefresh = model::refreshDestination,
                             onResume = model::resumeLast,
-                            onOpenCollection = { collectionName = it.name },
+                            onOpenCollection = {
+                                collectionName = it.name
+                                showingPlaybackQueue = false
+                            },
                             modifier = screenModifier
                         )
                     }
                     AppTab.EXPLORE -> ExploreScreen(
                         contents = ContentCatalog.all, canPlay = canPlay,
-                        onPlay = { queue, index -> model.play(queue, index) },
+                        onPlay = { queue, index ->
+                            playbackCollectionName = ContentCollection.RECOMMENDED.name
+                            model.play(queue, index)
+                        },
                         modifier = screenModifier
                     )
                     AppTab.LIBRARY -> ComingSoonScreen("보관함", "저장한 에피소드를 모아볼 공간이에요.", screenModifier)

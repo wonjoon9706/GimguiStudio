@@ -3,8 +3,6 @@ package com.example.pleosaudioguide.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -31,7 +29,6 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 /** 표시와 사용자 입력만 담당한다. 플레이어 생성/prepare/play는 화면 수명주기와 연결하지 않는다. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AudioPlayerScreen(
     queue: List<AudioContent>,
@@ -48,10 +45,10 @@ fun AudioPlayerScreen(
     onSeek30: (Boolean) -> Unit,
     onSeekTo: (Long) -> Unit,
     onSelectContent: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onShowQueue: () -> Unit = {}
 ) {
     val current = queue.find { it.id == currentContentId }.takeIf { hasCurrentAudio }
-    var showQueue by remember { mutableStateOf(false) }
     var scrubFraction by remember(currentContentId) { mutableStateOf<Float?>(null) }
     BoxWithConstraints(modifier.fillMaxSize()) {
         val artworkHeight = (maxHeight * 0.37f).coerceIn(148.dp, 300.dp)
@@ -134,27 +131,9 @@ fun AudioPlayerScreen(
                         textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall)
                 }
                 OutlinedButton(
-                    onClick = { showQueue = true },
+                    onClick = onShowQueue,
                     modifier = Modifier.heightIn(min = 56.dp).fillMaxWidth()
                 ) { Text("재생 목록 · ${queue.size}개") }
-            }
-        }
-    }
-    if (showQueue) {
-        ModalBottomSheet(onDismissRequest = { showQueue = false }) {
-            Text("재생 목록", Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 480.dp),
-                contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(queue, key = { it.id }) { item ->
-                    Column {
-                        if (item.id == currentContentId) Text("현재 항목", style = MaterialTheme.typography.labelMedium)
-                        EpisodeRow(item, !preparing) {
-                            onSelectContent(item.id)
-                            showQueue = false
-                        }
-                    }
-                }
             }
         }
     }
