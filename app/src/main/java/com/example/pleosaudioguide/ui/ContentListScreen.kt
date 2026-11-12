@@ -43,11 +43,12 @@ fun ContentListScreen(
     currentContentId: String? = null,
     isPlaying: Boolean = false,
     canReorder: Boolean = false,
-    onMoveItem: (Int, Int) -> Unit = { _, _ -> }
+    onMoveItem: (Int, Int) -> Unit = { _, _ -> },
+    showPlaybackQueue: Boolean = false
 ) {
     val scrollStates = rememberSaveableStateHolder()
     val quest = collection == ContentCollection.COMMUTE || collection == ContentCollection.TRIP
-    val contents = when (collection) {
+    val contents = if (showPlaybackQueue) playbackQueue else when (collection) {
         ContentCollection.DESTINATION -> recommendations
         ContentCollection.COMMUTE -> episodes.filter { it.category in listOf("일반 상식", "어학 학습", "기타 교양") }
         ContentCollection.TRIP -> (recommendations + episodes.filter {
@@ -70,7 +71,7 @@ fun ContentListScreen(
         Text("콘텐츠를 골라주세요", Modifier.padding(top = 20.dp),
             style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text(
-            when (collection) {
+            if (showPlaybackQueue) "현재 재생 목록 · ${playbackQueue.size}개" else when (collection) {
                 ContentCollection.DESTINATION -> destinationName?.let { "$it 관련 콘텐츠" }
                     ?: "목적지를 설정하면 관련 이야기를 추천해요"
                 ContentCollection.COMMUTE -> "출퇴근길에 듣는 상식 · 교양 · 어학"
@@ -118,7 +119,7 @@ fun ContentListScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (contents.isEmpty()) {
                     item {
-                        Text(if (collection == ContentCollection.DESTINATION)
+                        Text(if (showPlaybackQueue) "재생 목록이 비어 있어요." else if (collection == ContentCollection.DESTINATION)
                             "관련 콘텐츠가 없어요. 일반 추천에서 다른 이야기를 골라보세요."
                         else "아직 선택할 콘텐츠가 없어요.")
                     }

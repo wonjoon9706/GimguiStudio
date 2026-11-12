@@ -51,6 +51,8 @@ dependencies {
     implementation("ai.pleos.playground:TextToSpeech:3.3.1")
     implementation("androidx.media3:media3-exoplayer:1.9.0")
     implementation("androidx.media3:media3-session:1.9.0")
+    implementation("io.coil-kt.coil3:coil-compose:3.3.0")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.3.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.1")
     implementation(platform(libs.androidx.compose.bom))

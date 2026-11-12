@@ -64,6 +64,12 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var currentContentId by mutableStateOf<String?>(null)
         private set
+    val currentContent: AudioContent?
+        get() = playbackQueue.find { it.id == currentContentId }
+    val canSeek: Boolean
+        get() = hasCurrentAudio && !usingPleosVoice && durationMs > 0 &&
+            controller?.isCurrentMediaItemSeekable == true &&
+            controller?.isCommandAvailable(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM) == true
     private var nativeQueue = emptyList<AudioContent>()
     private var nativeIndex = 0
     private var nativeActive = false
@@ -187,6 +193,14 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun startNative() {
         val content = nativeQueue.getOrNull(nativeIndex) ?: return
+        updateNativeContent(content)
+        nativeActive = true
+        preparing = true
+        audioStatus = "Pleos 기기 내 시연 음성 재생 요청"
+        pleosVoice.speak(content)
+    }
+
+    private fun updateNativeContent(content: AudioContent) {
         playbackQueue = nativeQueue
         currentContentId = content.id
         title = content.title
@@ -194,13 +208,41 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
         durationMs = 0
         hasPrevious = nativeIndex > 0
         hasNext = nativeIndex < nativeQueue.lastIndex
-        nativeActive = true
-        preparing = true
-        audioStatus = "Pleos 기기 내 시연 음성 재생 요청"
-        pleosVoice.speak(content)
+    }
+
+    fun seekToPosition(requestedMs: Long) {
+        if (!canSeek || preparing) return
+        controller?.seekTo(PlaybackPosition.clamp(requestedMs, durationMs))
+        updatePlayer()
+    }
+
+    fun seekBy30Seconds(forward: Boolean) {
+        if (!canSeek) return
+        val current = controller?.currentPosition ?: return
+        seekToPosition(PlaybackPosition.skip30(current, durationMs, forward))
+    }
+
+    /** 현재 큐에서만 선택한다. Media3의 재생/일시정지 상태를 그대로 유지한다. */
+    fun selectPlaybackContent(id: String) {
+        if (preparing || id == currentContentId) return
+        val index = playbackQueue.indexOfFirst { it.id == id }
+        if (index < 0) return
+        if (usingPleosVoice) {
+            if (nativeActive) moveNative(index - nativeIndex)
+            else {
+                nativeIndex = index
+                updateNativeContent(nativeQueue[index])
+                hasCurrentAudio = true
+                saveBookmark(nativeQueue[index], 0)
+            }
+        } else {
+            controller?.seekToDefaultPosition(index)
+            updatePlayer()
+        }
     }
 
     fun togglePlayback() {
+        if (preparing) return
         if (usingPleosVoice) {
             if (nativeActive) { audioStatus = "시연 음성 중지"; pleosVoice.stop() }
             else startNative()
