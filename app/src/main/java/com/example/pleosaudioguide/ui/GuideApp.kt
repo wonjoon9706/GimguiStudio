@@ -43,9 +43,12 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
     val savedScreens = rememberSaveableStateHolder()
     val savedHomeScreens = rememberSaveableStateHolder()
     val navigation by model.navigationState.collectAsState()
+    val tripState by model.tripHistoryState.collectAsState()
+    val quizState by model.quiz.state.collectAsState()
+    val drivingMode = !tripState.browsingAllowed
     val canPlay = model.voiceReady && model.playerReady && !model.preparing &&
         !(model.usingPleosVoice && model.isPlaying)
-    BackHandler(playerVisible || selected != AppTab.HOME || collectionName != null) {
+    BackHandler(!drivingMode && (playerVisible || selected != AppTab.HOME || collectionName != null)) {
         if (playerVisible) closePlayer()
         else if (selected == AppTab.HOME) {
             collectionName = null
@@ -61,9 +64,13 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
         background = Color(0xFFFAFAF8), surface = Color(0xFFFAFAF8),
         surfaceVariant = Color(0xFFF0F0EE), onSurface = Color(0xFF262624)
     )) {
+        if (!drivingMode && !tripState.showEndScreen) model.resumePrompt?.let { saved ->
+            ResumePlaybackDialog(saved, { model.confirmResume(true) },
+                { model.confirmResume(false) }, model::dismissResumePrompt)
+        }
         Scaffold(
             bottomBar = {
-                Column {
+                if (!drivingMode && !tripState.showEndScreen) Column {
                     if (model.hasCurrentAudio && !playerVisible) MiniPlayer(model) { playerVisible = true }
                     NavigationBar(containerColor = Color.White) {
                         AppTab.entries.forEach { tab ->
@@ -86,7 +93,28 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
                 }
             }
         ) { padding ->
-            if (playerVisible) {
+            if (drivingMode) {
+                DrivingPlayerScreen(
+                    title = model.title.ifBlank { model.resumeContent?.title.orEmpty() },
+                    isPlaying = model.isPlaying, hasCurrentAudio = model.hasCurrentAudio,
+                    hasPrevious = model.hasPrevious, hasNext = model.hasNext,
+                    preparing = model.preparing, usingPleosVoice = model.usingPleosVoice,
+                    positionMs = model.positionMs, durationMs = model.durationMs,
+                    canResume = model.resumeContent != null,
+                    controlsReady = model.playerReady && (!model.usingPleosVoice || model.voiceReady),
+                    maxTitleLength = tripState.maxTitleLength,
+                    onPrevious = model::previous, onToggle = model::togglePlayback,
+                    onNext = model::next, onResume = model::resumeLast,
+                    modifier = Modifier.fillMaxSize().padding(padding)
+                )
+            } else if (tripState.showEndScreen) {
+                if (quizState.page == com.example.pleosaudioguide.QuizPage.SUMMARY) {
+                    TripFinishedScreen(tripState, model::dismissTripFinished,
+                        Modifier.fillMaxSize().padding(padding), model.quiz::openSetup)
+                } else QuizScreen(tripState, quizState, model.quiz::selectCount, model.quiz::start,
+                    model.quiz::selectAnswer, model.quiz::checkAnswer, model.quiz::next, model.quiz::retrySave,
+                    model.quiz::backToSetup, model::dismissTripFinished, Modifier.fillMaxSize().padding(padding))
+            } else if (playerVisible) {
                 AudioPlayerScreen(
                     queue = model.playbackQueue,
                     currentContentId = model.currentContentId,
@@ -170,7 +198,15 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
                         modifier = screenModifier
                     )
                     AppTab.LIBRARY -> ComingSoonScreen("보관함", "저장한 에피소드를 모아볼 공간이에요.", screenModifier)
-                    AppTab.MY_POT -> ComingSoonScreen("MY POT", "나의 학습과 취향을 담을 공간이에요.", screenModifier)
+                    AppTab.MY_POT -> Column(screenModifier.padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Text("MY POT", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                        Text("최근 운행 퀴즈")
+                        Text("이전에 선택한 학습 분량을 고르면 저장된 풀이를 이어갈 수 있어요.")
+                        Button(onClick = { model.reopenLatestQuiz() }, enabled = tripState.endedTrip != null) {
+                            Text("최근 운행 퀴즈 열기")
+                        }
+                    }
                 }
             }
         }

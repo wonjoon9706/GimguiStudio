@@ -3,10 +3,12 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.devtools.ksp") version "2.3.5"
 }
 
 android {
     namespace = "com.example.pleosaudioguide"
+    useLibrary("android.car")
     compileSdk {
         version = release(37)
     }
@@ -26,6 +28,9 @@ android {
         }
         val odiiKey = localProperties.getProperty("ODII_SERVICE_KEY", "").replace("\"", "")
         buildConfigField("String", "ODII_SERVICE_KEY", "\"$odiiKey\"")
+        val quizUrl = localProperties.getProperty("QUIZ_API_URL", "http://10.0.2.2:8787/quiz")
+            .replace("\\", "\\\\").replace("\"", "\\\"")
+        buildConfigField("String", "QUIZ_API_URL", "\"$quizUrl\"")
     }
 
     buildTypes {
@@ -40,13 +45,26 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
     buildFeatures {
         compose = true
         buildConfig = true
     }
 }
 
+ksp { arg("room.schemaLocation", "$projectDir/schemas") }
+
+// Node 22가 설치된 개발 PC에서 외부 API 호출 없는 중계 서버 테스트를 실행한다.
+tasks.register<Exec>("testQuizServer") {
+    group = "verification"
+    workingDir(rootProject.file("quiz-server"))
+    commandLine("node", "--test")
+    mustRunAfter("connectedDebugAndroidTest")
+}
+
 dependencies {
+    implementation("androidx.room:room-runtime:2.8.4")
+    ksp("androidx.room:room-compiler:2.8.4")
     implementation("ai.pleos.playground:NaviHelper:3.0.5")
     implementation("ai.pleos.playground:TextToSpeech:3.3.1")
     implementation("androidx.media3:media3-exoplayer:1.9.0")

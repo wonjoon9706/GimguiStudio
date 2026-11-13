@@ -18,6 +18,8 @@ import com.google.common.util.concurrent.ListenableFuture
 /** 차량의 표준 브라우저에 팟캐스트 > 학습 카테고리 > 등록 음원을 제공한다. */
 class GuidePlaybackService : MediaLibraryService() {
     private var session: MediaLibrarySession? = null
+    private var historyCollector: PlaybackHistoryCollector? = null
+    private var tripPlaybackGuard: TripPlaybackGuard? = null
     // 직접 등록 음원 + 이번 프로세스에서 앱이 조회한 오디 음원만 노출한다.
     private val playableContents get() = ContentCatalog.all.filter { it.audioUri != null } + OdiiStore.all
     private val categories get() = (ContentCatalog.all + OdiiStore.all).map { it.category }.distinct()
@@ -102,6 +104,9 @@ class GuidePlaybackService : MediaLibraryService() {
                 .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH).build(), true)
             setHandleAudioBecomingNoisy(true)
         }
+        val history = ListeningHistoryStore.get(this)
+        historyCollector = PlaybackHistoryCollector(player, history)
+        tripPlaybackGuard = TripPlaybackGuard(player, history.state)
         session = MediaLibrarySession.Builder(this, player, callback).build()
         // 연결/라이브러리 조회만으로 play()를 호출하지 않는다.
     }
@@ -115,6 +120,10 @@ class GuidePlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        tripPlaybackGuard?.close()
+        tripPlaybackGuard = null
+        historyCollector?.close()
+        historyCollector = null
         session?.run { player.release(); release() }
         session = null
         super.onDestroy()

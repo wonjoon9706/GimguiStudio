@@ -26,6 +26,7 @@ class PlayerIntegrationTest {
     @Test fun sharedPlayerSurvivesNavigationSeeksAndPausedSwipes() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val app = instrumentation.targetContext.applicationContext as Application
+        instrumentation.uiAutomation.grantRuntimePermission(app.packageName, "android.car.permission.CAR_SPEED")
         val store = ViewModelStore()
         val wav = app.cacheDir.resolve("player-integration-test.wav")
         val pcmSize = 90 * 8_000 * 2
@@ -35,8 +36,9 @@ class PlayerIntegrationTest {
             putShort(2.toShort()); putShort(16.toShort()); put("data".toByteArray()); putInt(pcmSize)
         }.array()
         wav.writeBytes(bytes)
+        val runId = System.nanoTime()
         val queue = (1..2).map {
-            AudioContent("player-test:$it", "플레이어 통합 검증 $it", "테스트 전용",
+            AudioContent("player-test:$runId:$it", "플레이어 통합 검증 $it", "테스트 전용",
                 emptyList(), "", 90, audioUri = wav.toURI().toString())
         }
         OdiiStore.remember(queue)
@@ -51,7 +53,13 @@ class PlayerIntegrationTest {
         val controller = future.get(15, TimeUnit.SECONDS)
         try {
             compose.setContent { GuideApp(model) }
-            compose.waitUntil(20_000) { model.playerReady && model.voiceReady }
+            compose.waitUntil(20_000) {
+                model.playerReady && model.voiceReady && model.tripHistoryState.value.browsingAllowed
+            }
+            compose.runOnIdle {
+                if (model.tripHistoryState.value.showEndScreen) model.dismissTripFinished()
+            }
+            compose.waitUntil(5_000) { !model.tripHistoryState.value.showEndScreen }
             compose.runOnIdle { model.play(queue) }
             compose.waitUntil(15_000) { model.durationMs > 0 && model.isPlaying }
             compose.runOnIdle {
@@ -114,6 +122,29 @@ class PlayerIntegrationTest {
             compose.waitUntil(5_000) { !model.isPlaying }
             compose.onNodeWithText("‹ 홈으로").performScrollTo().performClick()
             compose.runOnIdle { assertFalse(model.isPlaying) }
+
+            // A의 35초 위치를 B 전환 후에도 보존. 취소는 현재 B를 유지한다.
+            compose.runOnIdle { model.selectPlaybackContent(queue.first().id) }
+            compose.waitUntil(5_000) { model.resumePrompt != null }
+            compose.onNodeWithText("마지막 재생 위치 0:35 / 1:30").assertIsDisplayed()
+            compose.runOnIdle {
+                model.dismissResumePrompt()
+                assertEquals(queue[1].id, model.currentContentId)
+                assertFalse(controller.playWhenReady)
+                model.selectPlaybackContent(queue.first().id)
+            }
+            compose.waitUntil(5_000) { model.resumePrompt != null }
+            compose.onNodeWithText("이어듣기").performClick()
+            compose.waitUntil(5_000) {
+                model.currentContentId == queue.first().id && abs(model.positionMs - 35_000) < 500
+            }
+            compose.runOnIdle {
+                assertFalse(controller.playWhenReady)
+                model.play(queue, 0)
+            }
+            compose.waitUntil(5_000) { model.resumePrompt != null }
+            compose.onNodeWithText("처음부터").performClick()
+            compose.waitUntil(5_000) { model.isPlaying && model.positionMs < 5_000 }
         } finally {
             instrumentation.runOnMainSync {
                 controller.stop()

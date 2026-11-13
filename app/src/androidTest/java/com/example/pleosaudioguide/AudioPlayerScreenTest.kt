@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -45,18 +46,18 @@ class AudioPlayerScreenTest {
                     {}, {}, {}, {}, { currentId = it; selections++ })
             }
         }
-        compose.onNodeWithTag("playerArtworkCarousel").performTouchInput { swipeRight() }
+        compose.onNodeWithTag("playerArtworkCarousel").performTouchInput { swipe(Offset(width * .25f, centerY), Offset(width * .75f, centerY), 600) }
         compose.runOnIdle { assertEquals(0, selections) }
-        compose.onNodeWithTag("playerArtworkCarousel").performTouchInput { swipeLeft() }
+        compose.onNodeWithTag("playerArtworkCarousel").performTouchInput { swipe(Offset(width * .75f, centerY), Offset(width * .25f, centerY), 600) }
         compose.runOnIdle { assertEquals(queue[1].id, currentId) }
-        compose.onNodeWithTag("playerArtworkCarousel").performTouchInput { swipeLeft() }
+        compose.onNodeWithTag("playerArtworkCarousel").performTouchInput { swipe(Offset(width * .75f, centerY), Offset(width * .25f, centerY), 600) }
         compose.runOnIdle { assertEquals(queue[2].id, currentId) }
-        compose.onNodeWithTag("playerArtworkCarousel").performTouchInput { swipeLeft() }
+        compose.onNodeWithTag("playerArtworkCarousel").performTouchInput { swipe(Offset(width * .75f, centerY), Offset(width * .25f, centerY), 600) }
         compose.runOnIdle {
             assertEquals(queue[2].id, currentId)
             assertEquals(2, selections)
         }
-        compose.onNodeWithTag("playerArtworkCarousel").performTouchInput { swipeRight() }
+        compose.onNodeWithTag("playerArtworkCarousel").performTouchInput { swipe(Offset(width * .25f, centerY), Offset(width * .75f, centerY), 600) }
         compose.runOnIdle { assertEquals(queue[1].id, currentId) }
     }
 
