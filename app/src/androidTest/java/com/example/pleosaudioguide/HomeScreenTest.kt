@@ -151,7 +151,8 @@ class HomeScreenTest {
                 ExploreScreen(ContentCatalog.all.take(1), true, { _, index -> selected = index })
             }
         }
-        compose.onNodeWithText("듣기").performClick()
+        compose.onNodeWithText("역사").performClick()
+        compose.onNodeWithText("듣기").performScrollTo().performClick()
         assertEquals(0, selected)
     }
 }

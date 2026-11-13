@@ -190,7 +190,7 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
                         )
                     }
                     AppTab.EXPLORE -> ExploreScreen(
-                        contents = ContentCatalog.all, canPlay = canPlay,
+                        contents = (model.odiiState.contents + ContentCatalog.all).distinctBy { it.id }, canPlay = canPlay,
                         onPlay = { queue, index ->
                             playbackCollectionName = ContentCollection.RECOMMENDED.name
                             model.play(queue, index)
