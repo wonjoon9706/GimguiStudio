@@ -85,7 +85,7 @@ class PlayerIntegrationTest {
             compose.onNodeWithText("재생 목록 · 2개").performScrollTo().performClick()
             compose.onNodeWithText("콘텐츠를 골라주세요").assertIsDisplayed()
             compose.onNodeWithText("현재 재생 목록 · 2개").assertIsDisplayed()
-            compose.onNodeWithText("1번째 · 현재 항목").assertExists()
+            compose.onNodeWithText("현재 항목").assertExists()
             compose.onNodeWithText(queue[1].title).assertExists()
             compose.runOnIdle {
                 assertFalse(controller.playWhenReady)

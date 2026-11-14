@@ -44,7 +44,8 @@ data class TripHistoryState(
     val error: String? = null,
     val browsingAllowed: Boolean = false,
     val maxTitleLength: Int = 40,
-    val permissionPromptAllowed: Boolean = false
+    val permissionPromptAllowed: Boolean = false,
+    val vehicleDataValid: Boolean = false
 ) {
     // DB의 현재 운행 결과만 사용. 원고/재생 방식별 중복 행을 콘텐츠 수로 세지 않는다.
     val listenedContentCount: Int get() = records.filter {

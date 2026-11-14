@@ -26,15 +26,15 @@ class DrivingPlayerScreenTest {
             MaterialTheme {
                 DrivingPlayerScreen("긴 제목 테스트 콘텐츠", playing, true, true, true,
                     false, false, 1000, 60_000, false, true, 4,
-                    { previous++ }, { playing = !playing }, { next++ }, {},
-                    Modifier.requiredSize(320.dp, 320.dp))
+                    { playing = !playing }, {}, Modifier.requiredSize(320.dp, 320.dp),
+                    canSeek = true, onSeek30 = { if (it) next++ else previous++ })
             }
         }
         compose.onNodeWithText("긴 제목").assertIsDisplayed()
-        compose.onNodeWithText("일시정지").assertIsDisplayed().performClick()
-        compose.onNodeWithText("재생").assertIsDisplayed().performClick()
-        compose.onNodeWithText("이전").performClick()
-        compose.onNodeWithText("다음").performClick()
+        compose.onNodeWithContentDescription("일시정지").assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription("재생").assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription("30초 뒤로").performClick()
+        compose.onNodeWithContentDescription("30초 앞으로").performClick()
         compose.onNodeWithText("콘텐츠를 골라주세요").assertDoesNotExist()
         compose.onNodeWithText("순서 변경").assertDoesNotExist()
         compose.runOnIdle { assertTrue(playing); assertEquals(1, previous); assertEquals(1, next) }
@@ -46,14 +46,58 @@ class DrivingPlayerScreenTest {
             MaterialTheme {
                 DrivingPlayerScreen("", false, false, false, false,
                     false, false, 0, 0, true, true, 40,
-                    {}, {}, {}, { resumed = true }, Modifier.requiredSize(320.dp, 320.dp))
+                    {}, { resumed = true }, Modifier.requiredSize(320.dp, 320.dp))
             }
         }
         compose.runOnIdle { assertFalse(resumed) }
-        compose.onNodeWithText("이전").assertIsNotEnabled()
-        compose.onNodeWithText("다음").assertIsNotEnabled()
-        compose.onNodeWithText("이어 듣기").performClick()
+        compose.onNodeWithContentDescription("30초 뒤로").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("30초 앞으로").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("이어 듣기").performClick()
         compose.runOnIdle { assertTrue(resumed) }
+    }
+
+    @Test fun swipeSelectsAdjacentContentWithoutAutoplayOrListNavigation() {
+        val queue = ContentCatalog.all.take(3)
+        var current by mutableStateOf(1)
+        var commands = 0
+        compose.setContent {
+            MaterialTheme {
+                DrivingPlayerScreen(queue[current].title, false, true, current > 0, current < 2,
+                    false, false, 10_000, 60_000, false, true, 80, {}, {},
+                    Modifier.requiredSize(420.dp, 720.dp), content = queue[current],
+                    queue = queue, canSeek = true, onSelectContent = { id ->
+                        current = queue.indexOfFirst { it.id == id }
+                        commands++
+                    })
+            }
+        }
+        compose.runOnIdle { assertEquals(0, commands) }
+        compose.onNodeWithTag("playerArtworkCarousel").performTouchInput { swipeLeft() }
+        compose.waitUntil(5000) { current == 2 }
+        compose.waitForIdle()
+        compose.onNodeWithTag("playerArtworkCarousel").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals(2, current); assertEquals(1, commands) }
+        compose.onNodeWithTag("playerArtworkCarousel").performTouchInput { swipeRight() }
+        compose.waitUntil(5000) { current == 1 }
+        repeat(2) {
+            compose.onNodeWithTag("playerArtworkCarousel").performTouchInput { swipeLeft() }
+            compose.waitUntil(5000) { current == 2 }
+            compose.onNodeWithTag("playerArtworkCarousel").performTouchInput { swipeRight() }
+            compose.waitUntil(5000) { current == 1 }
+            compose.onNodeWithTag("playerArtworkCarousel").performTouchInput { swipeRight() }
+            compose.waitUntil(5000) { current == 0 }
+            compose.onNodeWithTag("playerArtworkCarousel").performTouchInput { swipeRight() }
+            compose.waitForIdle()
+            compose.runOnIdle { assertEquals(0, current) }
+            compose.onNodeWithTag("playerArtworkCarousel").performTouchInput { swipeLeft() }
+            compose.waitUntil(5000) { current == 1 }
+        }
+        compose.runOnIdle { assertEquals(10, commands) }
+        compose.onNodeWithContentDescription("재생").assertExists()
+        compose.onNodeWithText("재생 목록 · 3개").assertDoesNotExist()
+        compose.onNode(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsActions.SetProgress))
+            .assertDoesNotExist()
     }
 
     @Test fun changingRestrictionHidesQuizAndRestoresParkedScreen() {
@@ -63,7 +107,7 @@ class DrivingPlayerScreenTest {
             MaterialTheme {
                 if (parked) TripFinishedScreen(state, {})
                 else DrivingPlayerScreen("", false, false, false, false, false, false, 0, 0,
-                    false, false, 40, {}, {}, {}, {})
+                    false, false, 40, {}, {})
             }
         }
         compose.onNodeWithText("주행을 마쳤어요").assertExists()

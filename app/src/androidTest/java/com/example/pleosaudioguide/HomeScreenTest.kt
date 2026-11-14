@@ -24,23 +24,21 @@ class HomeScreenTest {
     @Test fun noBookmarkHidesContinueSection() {
         compose.setContent {
             MaterialTheme {
-                HomeScreen(null, "목적지 없음", emptyList(), emptyList(), null,
-                    false, false, {}, {}, {})
+                HomeScreen(null, "목적지 없음", emptyList(), emptyList(), false, {}, {})
             }
         }
         compose.onNodeWithText("이어서 듣기").assertDoesNotExist()
         compose.onNodeWithText("목적지 기반 팟캐스트 추천").assertIsDisplayed()
     }
 
-    @Test fun bookmarkShowsRestartForDemoVoice() {
+    @Test fun homeNoLongerContainsResumeCard() {
         compose.setContent {
             MaterialTheme {
-                HomeScreen(null, "목적지 없음", emptyList(), emptyList(), ContentCatalog.all.first(),
-                    true, false, {}, {}, {})
+                HomeScreen(null, "목적지 없음", emptyList(), emptyList(), false, {}, {})
             }
         }
-        compose.onNodeWithText("이어서 듣기").assertExists()
-        compose.onNodeWithText("처음부터 다시 듣기").assertExists()
+        compose.onNodeWithText("이어서 듣기").assertDoesNotExist()
+        compose.onNodeWithText("처음부터 다시 듣기").assertDoesNotExist()
     }
 
     @Test fun homeCardsOpenCollectionsWithoutRequiringPlaybackReadiness() {
@@ -48,7 +46,7 @@ class HomeScreenTest {
         compose.setContent {
             MaterialTheme {
                 HomeScreen("경주", "연결됨", ContentCatalog.all.take(1), ContentCatalog.all.drop(1),
-                    null, false, false, {}, {}, { selected = it })
+                    false, {}, { selected = it })
             }
         }
         compose.onNodeWithText(ContentCatalog.all.first().title).performScrollTo().performClick()
@@ -119,15 +117,40 @@ class HomeScreenTest {
                     canReorder = true, onMoveItem = { from, to -> queue = PlaybackQueue.move(queue, from, to) })
             }
         }
-        compose.onNodeWithText("1번째 · 재생 중").assertIsDisplayed()
-        compose.onNodeWithText("순서 변경").performClick()
-        compose.onNodeWithContentDescription("${episodes.first().title} 아래로 이동")
+        compose.onNodeWithText("재생 중").assertIsDisplayed()
+        compose.onNodeWithText("1번째").assertDoesNotExist()
+        compose.onNodeWithText("순서 변경").assertDoesNotExist()
+        compose.onNodeWithContentDescription("${episodes.first().title} 순서 이동")
             .performScrollTo().performClick()
+        compose.onNodeWithText("아래로").performClick()
         assertEquals(listOf(episodes[1], episodes[0], episodes[2]), queue)
-        compose.onNodeWithText("2번째 · 재생 중").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("순서 변경 완료").performClick()
+        compose.onNodeWithText("재생 중").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("2번째").assertDoesNotExist()
         compose.onNodeWithText(episodes[1].title).performScrollTo().performClick()
         assertEquals(episodes[1].id, selectedId)
+    }
+
+    @Test fun draftHandleReordersWithoutPlaybackAndPlayUsesNewOrder() {
+        val episodes = ContentCatalog.all.take(3)
+        var played = emptyList<AudioContent>()
+        var selected = -1
+        compose.setContent {
+            MaterialTheme {
+                ContentListScreen(ContentCollection.RECOMMENDED, null, "목적지 없음",
+                    emptyList(), episodes, true, {}, {}, { queue, index ->
+                        played = queue
+                        selected = index
+                    })
+            }
+        }
+        compose.onNodeWithContentDescription("${episodes.first().title} 순서 이동")
+            .performScrollTo().performClick()
+        compose.onNodeWithText("맨 아래로").performClick()
+        assertEquals(-1, selected)
+        compose.onNodeWithText("듣기").assertDoesNotExist()
+        compose.onNodeWithText(episodes[1].title).performScrollTo().performClick()
+        assertEquals(listOf(episodes[1], episodes[2], episodes[0]), played)
+        assertEquals(0, selected)
     }
 
     @Test fun anotherCollectionsQueueDoesNotColorUnqueuedEpisodes() {

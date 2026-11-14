@@ -32,6 +32,25 @@ class PlaybackResumeTest {
         compose.runOnIdle { assertEquals(0L, chosen) }
     }
 
+    @Test fun drivingDialogIsBriefAndOffersBothPositions() {
+        var chosen: Long? = null
+        val title = "아주 긴 주행 콘텐츠 제목"
+        val saved = PlaybackResume(audio.copy(title = title), 150_000, 600_000)
+        compose.setContent {
+            MaterialTheme {
+                ResumePlaybackDialog(saved, { chosen = 0 }, { chosen = saved.positionMs }, { chosen = -1 },
+                    driving = true, maxTitleLength = 5)
+            }
+        }
+        compose.onNodeWithText(title.take(5)).assertIsDisplayed()
+        compose.onNodeWithText(title).assertDoesNotExist()
+        compose.onNodeWithText("건너뛴 구간은 청취 완료로 인정되지 않아요.").assertDoesNotExist()
+        compose.onNodeWithText("처음부터").performClick()
+        compose.runOnIdle { assertEquals(0L, chosen) }
+        compose.onNodeWithText("이어듣기").performClick()
+        compose.runOnIdle { assertEquals(150_000L, chosen) }
+    }
+
     @Test fun perContentPositionsSurviveDatabaseReopenWithoutChangingHeardRanges() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val file = context.cacheDir.resolve("resume-${System.nanoTime()}.db")

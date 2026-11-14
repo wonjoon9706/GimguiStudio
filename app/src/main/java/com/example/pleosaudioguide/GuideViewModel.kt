@@ -29,6 +29,7 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
     private val listeningHistory = ListeningHistoryStore.get(application)
     val tripHistoryState = listeningHistory.state
     val libraryState = listeningHistory.library
+    val automaticResumePrompt = listeningHistory.automaticResumePrompt
     val quiz = QuizCoordinator(viewModelScope, tripHistoryState, listeningHistory, QuizApi())
     fun dismissTripFinished() {
         quiz.dismiss()
@@ -40,11 +41,17 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
     private val bookmarks = application.getSharedPreferences("playback_bookmark", 0)
     var resumeContent by mutableStateOf(findContent(bookmarks.getString("id", null)))
         private set
+    var savedPlaybackResume by mutableStateOf<PlaybackResume?>(null)
+        private set
     var hasCurrentAudio by mutableStateOf(false)
         private set
     var resumePrompt by mutableStateOf<PlaybackResume?>(null)
         private set
     private var pendingResume: ((Long) -> Unit)? = null
+    private var pendingDrivingResume = false
+    private fun resumeChoiceAllowed(allowDriving: Boolean) = tripHistoryState.value.let {
+        !it.showEndScreen && (it.browsingAllowed || (allowDriving && it.vehicleDataValid))
+    }
     private var resumeRequest = 0L
     private var resumeLookup: Job? = null
 
@@ -53,18 +60,20 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
         resumeLookup?.cancel()
         resumePrompt = null
         pendingResume = null
+        pendingDrivingResume = false
     }
     fun confirmResume(fromBeginning: Boolean) {
         val prompt = resumePrompt ?: return
         val action = pendingResume ?: return
+        val allowed = resumeChoiceAllowed(pendingDrivingResume)
         dismissResumePrompt()
-        if (!tripHistoryState.value.browsingAllowed || tripHistoryState.value.showEndScreen) return
+        if (!allowed) return
         action(if (fromBeginning) 0 else prompt.positionMs)
     }
-    private fun requestResume(content: AudioContent, action: (Long) -> Unit) {
+    private fun requestResume(content: AudioContent, allowDriving: Boolean = false, action: (Long) -> Unit) {
         dismissResumePrompt()
         if (content.audioUri == null) { action(0); return }
-        if (!tripHistoryState.value.browsingAllowed || tripHistoryState.value.showEndScreen) return
+        if (!resumeChoiceAllowed(allowDriving)) return
         listeningHistory.checkpointPlayback()
         val request = resumeRequest
         resumeLookup = viewModelScope.launch {
@@ -73,11 +82,11 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
                     ?: bookmarks.getLong("position", 0).takeIf {
                         bookmarks.getString("id", null) == content.id && it > 0
                     }?.let { PlaybackResume(content, it, 0) }
-                if (request != resumeRequest || !tripHistoryState.value.browsingAllowed ||
-                    tripHistoryState.value.showEndScreen) return@launch
+                if (request != resumeRequest || !resumeChoiceAllowed(allowDriving)) return@launch
                 if (saved?.canResume == true) {
                     resumePrompt = saved
                     pendingResume = action
+                    pendingDrivingResume = allowDriving
                 } else action(0)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -192,20 +201,25 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
+            automaticResumePrompt.collect { if (it != null) dismissResumePrompt() }
+        }
+        viewModelScope.launch {
             try {
                 val saved = listeningHistory.latestPlaybackResume().awaitQuiz()
                 if (saved?.canResume == true && !hasCurrentAudio) {
                     OdiiStore.remember(listOf(saved.content))
                     resumeContent = saved.content
+                    savedPlaybackResume = saved
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (_: Exception) { audioStatus = "재생 위치 복원 실패" }
         }
         viewModelScope.launch {
-            tripHistoryState.map { it.browsingAllowed && !it.showEndScreen }.distinctUntilChanged().collect {
-                if (!it) dismissResumePrompt()
-            }
+            tripHistoryState.map { Triple(it.browsingAllowed, it.vehicleDataValid, it.showEndScreen) }
+                .distinctUntilChanged().collect {
+                    if (!resumeChoiceAllowed(pendingDrivingResume)) dismissResumePrompt()
+                }
         }
         controllerFuture.addListener({
             if (!closed) {
@@ -344,6 +358,47 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
         seekToPosition(PlaybackPosition.skip30(current, durationMs, forward))
     }
 
+    /** 주행 화면의 고정 간격 이동. 임의 위치 탐색과 별도로 처리한다. */
+    fun seekDrivingBy30Seconds(forward: Boolean) {
+        if (tripHistoryState.value.showEndScreen || preparing || !canSeek) return
+        val player = controller ?: return
+        player.seekTo(PlaybackPosition.skip30(player.currentPosition, durationMs, forward))
+        updatePlayer()
+    }
+
+    /** 주행 스와이프는 인접 항목만 선택하고, 저장 위치가 있으면 간단한 선택창을 제공한다. */
+    fun selectDrivingContent(id: String) {
+        if (tripHistoryState.value.showEndScreen || preparing || !hasCurrentAudio) return
+        val from = playbackQueue.indexOfFirst { it.id == currentContentId }
+        val to = playbackQueue.indexOfFirst { it.id == id }
+        if (from < 0 || to < 0 || kotlin.math.abs(to - from) != 1) return
+        if (usingPleosVoice) {
+            if (nativeActive) moveNative(to - from)
+            else {
+                nativeIndex = to
+                updateNativeContent(nativeQueue[to])
+                hasCurrentAudio = true
+                saveBookmark(nativeQueue[to], 0)
+            }
+        } else {
+            val player = controller ?: return
+            if (!player.isCommandAvailable(Player.COMMAND_SEEK_TO_MEDIA_ITEM)) return
+            val target = playbackQueue[to]
+            val sourceId = currentContentId
+            requestResume(target, allowDriving = true) select@ { position ->
+                if (preparing || usingPleosVoice || !hasCurrentAudio ||
+                    currentContentId != sourceId || controller !== player) return@select
+                val sourceIndex = playbackQueue.indexOfFirst { it.id == sourceId }
+                val targetIndex = playbackQueue.indexOfFirst { it.id == target.id }
+                if (sourceIndex < 0 || targetIndex < 0 || kotlin.math.abs(targetIndex - sourceIndex) != 1)
+                    return@select
+                if (!player.isCommandAvailable(Player.COMMAND_SEEK_TO_MEDIA_ITEM)) return@select
+                player.seekTo(targetIndex, position)
+                updatePlayer()
+            }
+        }
+    }
+
     /** 현재 큐에서만 선택한다. Media3의 재생/일시정지 상태를 그대로 유지한다. */
     fun selectPlaybackContent(id: String) {
         if (!tripHistoryState.value.browsingAllowed || preparing || id == currentContentId) return
@@ -434,10 +489,37 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** 썸네일은 화면 진입만 한다. 세션이 없으면 저장 위치에서 일시정지 상태로 준비한다. */
+    fun preparePlayerForViewing(): Boolean {
+        if (!tripHistoryState.value.browsingAllowed || tripHistoryState.value.showEndScreen) return false
+        if (hasCurrentAudio) return true
+        val content = resumeContent ?: return false
+        val player = controller ?: return false
+        if (!playerReady || preparing || nativeActive) return false
+        dismissResumePrompt()
+        usingPleosVoice = content.audioUri == null
+        player.pause()
+        if (usingPleosVoice) {
+            nativeQueue = listOf(content)
+            nativeIndex = 0
+            updateNativeContent(content)
+            isPlaying = false
+        } else {
+            val position = savedPlaybackResume?.takeIf { it.content.id == content.id }?.positionMs
+                ?: bookmarks.getLong("position", 0)
+            player.setMediaItems(NarrationAudio.mediaItems(listOf(content)), 0, position)
+            player.prepare()
+            updatePlayer()
+        }
+        hasCurrentAudio = true
+        return true
+    }
+
     fun resumeLast() {
         val content = resumeContent ?: return
         if (tripHistoryState.value.browsingAllowed) play(listOf(content))
-        else playNow(listOf(content), 0, bookmarks.getLong("position", 0))
+        else playNow(listOf(content), 0, savedPlaybackResume?.takeIf { it.content.id == content.id }?.positionMs
+            ?: bookmarks.getLong("position", 0))
     }
 
     private fun saveBookmark(content: AudioContent, position: Long) {
@@ -446,6 +528,7 @@ class GuideViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun clearBookmark() {
+        savedPlaybackResume = null
         resumeContent = null
         bookmarks.edit().clear().apply()
     }

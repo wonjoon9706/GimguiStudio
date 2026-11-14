@@ -20,6 +20,21 @@ class ListeningHistoryStoreTest {
         store.updateVehicle(VehicleReading(4, 0f, true), time + 5000)
     }
 
+    @Test fun vehicleValidityIsAvailableForPlaybackChoiceWithoutUnlockingBrowsing() {
+        val file = context.cacheDir.resolve("resume-vehicle-${System.nanoTime()}.db")
+        val store = open(file)
+        try {
+            move(store, 0)
+            store.snapshot().get(5, TimeUnit.SECONDS)
+            assertTrue(store.state.value.vehicleDataValid)
+            assertFalse(store.state.value.browsingAllowed)
+            store.updateVehicle(VehicleReading(error = "테스트 신호 없음"), 1000)
+            store.snapshot().get(5, TimeUnit.SECONDS)
+            assertFalse(store.state.value.vehicleDataValid)
+            assertFalse(store.state.value.browsingAllowed)
+        } finally { drainAndClose(store); context.deleteDatabase(file.absolutePath) }
+    }
+
     @Test fun cumulativeEightyPercentIncludesPreDriveAndFreezesAtTripEnd() {
         val file = context.cacheDir.resolve("cumulative-${System.nanoTime()}.db")
         val content = ContentCatalog.all.first().copy(audioUri = "https://example.org/a")

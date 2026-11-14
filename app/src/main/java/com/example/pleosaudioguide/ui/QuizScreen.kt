@@ -24,8 +24,7 @@ fun QuizScreen(
     val sources = QuizRules.sources(trip.records)
     Column(modifier.padding(20.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("POTQUEST", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        HorizontalDivider()
+        AppHeader()
         when (state.page) {
             QuizPage.PREPARING -> {
                 Text("퀴즈를 준비하고 있어요", style = MaterialTheme.typography.headlineSmall)

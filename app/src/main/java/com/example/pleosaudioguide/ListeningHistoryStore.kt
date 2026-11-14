@@ -19,6 +19,8 @@ class ListeningHistoryStore internal constructor(
     private val potionNames: List<String> = listOf("pot_placeholder"),
     private val clock: () -> Long = { System.currentTimeMillis() }
 ) : QuizStorage {
+    // 서비스가 소유하는 일시적 선택 요청. DB 기록이나 퀴즈 상태와 분리한다.
+    internal val automaticResumePrompt = MutableStateFlow<AutomaticResumePrompt?>(null)
     private val worker = Executors.newSingleThreadExecutor()
     private val dao get() = database.history()
     private var detector = TripDetection()
@@ -88,8 +90,10 @@ class ListeningHistoryStore internal constructor(
     }
 
     fun updateVehicle(value: VehicleReading, elapsedMs: Long) = submit {
+        val readingChanged = reading != value
         reading = value
-        when (detector.update(value, elapsedMs)) {
+        val action = detector.update(value, elapsedMs)
+        when (action) {
             TripDetection.Action.START -> {
                 active = TripEntity(UUID.randomUUID().toString(), clock())
                 dao.insertTrip(active!!)
@@ -108,7 +112,9 @@ class ListeningHistoryStore internal constructor(
             }
             TripDetection.Action.NONE -> Unit
         }
-        publish()
+        // 동일 차량 신호의 반복 수신은 DB 전체 퀴즈/보관함을 다시 읽지 않는다.
+        // 검출기는 매번 갱신하여 같은 P 신호의 5초 확인도 유지한다.
+        if (readingChanged || action != TripDetection.Action.NONE) publish()
     }
 
     fun dismissEndScreen() = submit {
@@ -229,7 +235,7 @@ class ListeningHistoryStore internal constructor(
         mutableState.value = TripHistoryState(active?.id, ended,
             ownedRecords, reading.parked, reading.error ?: error,
             browsingAllowed = reading.parked, maxTitleLength = reading.maxStringLength.coerceIn(0, 80),
-            permissionPromptAllowed = reading.uxAllowed)
+            permissionPromptAllowed = reading.uxAllowed, vehicleDataValid = reading.valid)
     }
 
     private fun submit(action: () -> Unit) {

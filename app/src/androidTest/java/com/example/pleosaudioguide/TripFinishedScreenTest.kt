@@ -33,8 +33,9 @@ class TripFinishedScreenTest {
         }
         compose.onNodeWithText("주행을 마쳤어요").assertIsDisplayed()
         compose.onNodeWithContentDescription("나의 항아리").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("퀴즈로 음악 완성하기").performScrollTo().assertIsNotEnabled()
-        compose.onNodeWithText("나중에 하기").performScrollTo().performClick()
+        compose.onNodeWithText("퀴즈로 음악 완성하기").assertDoesNotExist()
+        compose.onNodeWithText("선택하면 대본을 서버로 보내 문제를 준비해요").assertDoesNotExist()
+        compose.onNodeWithText("홈으로").performScrollTo().performClick()
         compose.runOnIdle { assertTrue(later) }
     }
 }

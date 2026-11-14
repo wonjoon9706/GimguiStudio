@@ -19,6 +19,7 @@ import com.google.common.util.concurrent.ListenableFuture
 class GuidePlaybackService : MediaLibraryService() {
     private var session: MediaLibrarySession? = null
     private var historyCollector: PlaybackHistoryCollector? = null
+    private var automaticResume: AutomaticPlaybackResume? = null
     private var tripPlaybackGuard: TripPlaybackGuard? = null
     // 직접 등록 음원 + 이번 프로세스에서 앱이 조회한 오디 음원만 노출한다.
     private val playableContents get() = ContentCatalog.all.filter { it.audioUri != null } + OdiiStore.all
@@ -105,7 +106,10 @@ class GuidePlaybackService : MediaLibraryService() {
             setHandleAudioBecomingNoisy(true)
         }
         val history = ListeningHistoryStore.get(this)
-        historyCollector = PlaybackHistoryCollector(player, history)
+        // 자동 전환 리스너가 새 항목의 0초 위치 수집보다 먼저 실행되어야 한다.
+        val resume = AutomaticPlaybackResume(player, history)
+        automaticResume = resume
+        historyCollector = PlaybackHistoryCollector(player, history, resume::canSavePosition)
         tripPlaybackGuard = TripPlaybackGuard(player, history.state)
         session = MediaLibrarySession.Builder(this, player, callback).build()
         // 연결/라이브러리 조회만으로 play()를 호출하지 않는다.
@@ -122,8 +126,11 @@ class GuidePlaybackService : MediaLibraryService() {
     override fun onDestroy() {
         tripPlaybackGuard?.close()
         tripPlaybackGuard = null
+        // 조회 대기 중인 새 항목의 0초가 종료 수집으로 저장되지 않게 수집기를 먼저 닫는다.
         historyCollector?.close()
         historyCollector = null
+        automaticResume?.close()
+        automaticResume = null
         session?.run { player.release(); release() }
         session = null
         super.onDestroy()

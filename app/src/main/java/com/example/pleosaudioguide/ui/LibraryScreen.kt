@@ -41,11 +41,7 @@ fun LibraryScreen(state: LibraryState, modifier: Modifier = Modifier) {
     Column(Modifier.fillMaxSize().background(Color(0xFFF6F7F9))
         .verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("POT-QUEST", Modifier.weight(1f), fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Text("● 정차 중", style = MaterialTheme.typography.labelSmall)
-        }
-        HorizontalDivider()
+        AppHeader()
         if (potion != null) {
             TextButton(onClick = { selected = null }) { Text("‹ 보관함") }
             PotionDetail(potion)

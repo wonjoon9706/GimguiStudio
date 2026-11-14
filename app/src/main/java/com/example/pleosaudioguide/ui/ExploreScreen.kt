@@ -17,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalFocusManager
@@ -57,15 +56,7 @@ fun ExploreScreen(
     LazyColumn(modifier.fillMaxSize().background(Color(0xFFF6F7F9)),
         contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         item {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("POT-QUEST", Modifier.weight(1f), fontSize = 26.sp, fontWeight = FontWeight.Bold,
-                    textDecoration = TextDecoration.Underline)
-                Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFFFFB52E)) {
-                    Text("♫", Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                        color = Color.White, fontSize = 26.sp)
-                }
-            }
-            HorizontalDivider(Modifier.padding(top = 18.dp))
+            AppHeader()
         }
         item {
             Text("탐색", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)

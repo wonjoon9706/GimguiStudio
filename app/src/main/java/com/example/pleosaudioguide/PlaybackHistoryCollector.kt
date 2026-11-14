@@ -6,7 +6,8 @@ import android.os.SystemClock
 import androidx.media3.common.Player
 
 /** 서비스 소유: Activity가 없어도 실제 재생을 추적하고 시크 구간을 청취로 세지 않는다. */
-class PlaybackHistoryCollector(private val player: Player, private val history: ListeningHistoryStore) : Player.Listener {
+class PlaybackHistoryCollector(private val player: Player, private val history: ListeningHistoryStore,
+    private val canSavePosition: (String) -> Boolean = { true }) : Player.Listener {
     private val main = Handler(Looper.getMainLooper())
     private val tracker = ListeningTracker { content, range, duration ->
         history.record(content, range, duration)
@@ -14,7 +15,7 @@ class PlaybackHistoryCollector(private val player: Player, private val history: 
     private fun content(id: String?) = ContentCatalog.all.find { it.id == id } ?: OdiiStore.find(id)
     private var savedPosition: PlaybackResume? = null
     private fun savePosition(item: AudioContent?, position: Long, duration: Long) {
-        if (item?.audioUri == null || duration <= 0) return
+        if (item?.audioUri == null || duration <= 0 || !canSavePosition(item.id)) return
         val value = PlaybackResume(item, position.coerceIn(0, duration), duration)
         if (value != savedPosition) {
             savedPosition = value

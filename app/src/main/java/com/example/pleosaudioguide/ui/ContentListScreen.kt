@@ -1,7 +1,11 @@
 package com.example.pleosaudioguide.ui
 
-import androidx.compose.foundation.clickable
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,19 +17,24 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.example.pleosaudioguide.AudioContent
+import com.example.pleosaudioguide.PlaybackQueue
+import com.example.pleosaudioguide.R
 
-enum class ContentCollection {
-    DESTINATION, COMMUTE, TRIP, RECOMMENDED
-}
+enum class ContentCollection { DESTINATION, COMMUTE, TRIP, RECOMMENDED }
 
-/** 홈의 진입점만 바꾸며, 목록 이동은 재생 큐를 변경하지 않는다. */
+/** 목록 순서 편집은 재생을 시작하지 않으며, 재생 중 이동은 기존 큐에 위임한다. */
 @Composable
 fun ContentListScreen(
     collection: ContentCollection,
@@ -46,6 +55,7 @@ fun ContentListScreen(
     onMoveItem: (Int, Int) -> Unit = { _, _ -> },
     showPlaybackQueue: Boolean = false
 ) {
+    BackHandler(onBack = onBack)
     val scrollStates = rememberSaveableStateHolder()
     val quest = collection == ContentCollection.COMMUTE || collection == ContentCollection.TRIP
     val contents = if (showPlaybackQueue) playbackQueue else when (collection) {
@@ -56,19 +66,25 @@ fun ContentListScreen(
         }).distinctBy { it.id }
         ContentCollection.RECOMMENDED -> episodes
     }
+    var draftIds by rememberSaveable(collection.name) { mutableStateOf(emptyList<String>()) }
     val ranks = playbackQueue.mapIndexed { index, content -> content.id to index }.toMap()
-    val visibleIds = contents.map { it.id }.toSet()
-    val queued = playbackQueue.filter { it.id in visibleIds }
-    val displayed = queued + contents.filter { it.id !in ranks }
-    var editing by rememberSaveable(collection.name) { mutableStateOf(false) }
-    Column(modifier.fillMaxSize().padding(horizontal = 24.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("POTQUEST", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.ExtraBold)
-            TextButton(onClick = onBack) { Text("홈으로") }
-        }
-        HorizontalDivider()
-        Text("콘텐츠를 골라주세요", Modifier.padding(top = 20.dp),
+    val queued = playbackQueue.filter { item -> contents.any { it.id == item.id } }
+    val unqueued = contents.filter { it.id !in ranks }.let { items ->
+        val byId = items.associateBy { it.id }
+        draftIds.mapNotNull(byId::get) + items.filter { it.id !in draftIds }
+    }
+    val displayed = queued + unqueued
+    fun move(content: AudioContent, target: Int) {
+        val group = if (content.id in ranks) queued else unqueued
+        val from = group.indexOfFirst { it.id == content.id }
+        if (from < 0 || target !in group.indices) return
+        if (content.id in ranks) {
+            if (canReorder) onMoveItem(ranks.getValue(content.id), ranks.getValue(group[target].id))
+        } else if (canPlay) draftIds = PlaybackQueue.move(group, from, target).map { it.id }
+    }
+    Column(modifier.fillMaxSize().background(Color(0xFFF6F7F9)).padding(horizontal = 24.dp)) {
+        AppHeader()
+        Text("콘텐츠를 골라주세요", Modifier.padding(top = 16.dp),
             style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text(
             if (showPlaybackQueue) "현재 재생 목록 · ${playbackQueue.size}개" else when (collection) {
@@ -77,8 +93,7 @@ fun ContentListScreen(
                 ContentCollection.COMMUTE -> "출퇴근길에 듣는 상식 · 교양 · 어학"
                 ContentCollection.TRIP -> "가족 여행에 어울리는 관광 · 역사 · 어학"
                 ContentCollection.RECOMMENDED -> "목적지와 관계없이 자유롭게 골라보세요"
-            },
-            Modifier.padding(vertical = 8.dp), style = MaterialTheme.typography.bodySmall
+            }, Modifier.padding(vertical = 8.dp), style = MaterialTheme.typography.bodySmall
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             CollectionTab("목적지 추천", collection == ContentCollection.DESTINATION,
@@ -89,130 +104,107 @@ fun ContentListScreen(
             CollectionTab("일반 추천", collection == ContentCollection.RECOMMENDED,
                 Modifier.weight(1f)) { onSelectCollection(ContentCollection.RECOMMENDED) }
         }
-        if (quest) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = collection == ContentCollection.COMMUTE,
-                    onClick = { onSelectCollection(ContentCollection.COMMUTE) },
-                    label = { Text("출퇴근 퀘스트") })
-                FilterChip(selected = collection == ContentCollection.TRIP,
-                    onClick = { onSelectCollection(ContentCollection.TRIP) },
-                    label = { Text("가족 여행 퀘스트") })
-            }
+        if (quest) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = collection == ContentCollection.COMMUTE,
+                onClick = { onSelectCollection(ContentCollection.COMMUTE) }, label = { Text("출퇴근 퀘스트") })
+            FilterChip(selected = collection == ContentCollection.TRIP,
+                onClick = { onSelectCollection(ContentCollection.TRIP) }, label = { Text("가족 여행 퀘스트") })
         }
-        if (collection == ContentCollection.DESTINATION) {
-            Text(onlineStatus ?: destinationStatus, Modifier.padding(vertical = 8.dp),
-                style = MaterialTheme.typography.bodySmall)
-        }
-        if (queued.isNotEmpty()) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("재생 순서 · 밝은색부터 순서대로", Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodySmall)
-                TextButton(onClick = { editing = !editing }, enabled = canReorder) {
-                    Text(if (editing) "순서 변경 완료" else "순서 변경")
-                }
-            }
-        }
-        // 각 목록은 별도 스크롤 상태를 갖는다. 목록 변경으로 재생은 시작하지 않는다.
+        if (collection == ContentCollection.DESTINATION) Text(onlineStatus ?: destinationStatus,
+            Modifier.padding(vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
         scrollStates.SaveableStateProvider(collection.name) {
-            LazyColumn(Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = PaddingValues(vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (contents.isEmpty()) {
-                    item {
-                        Text(if (showPlaybackQueue) "재생 목록이 비어 있어요." else if (collection == ContentCollection.DESTINATION)
+            LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (contents.isEmpty()) item {
+                    Text(if (showPlaybackQueue) "재생 목록이 비어 있어요."
+                        else if (collection == ContentCollection.DESTINATION)
                             "관련 콘텐츠가 없어요. 일반 추천에서 다른 이야기를 골라보세요."
                         else "아직 선택할 콘텐츠가 없어요.")
-                    }
                 }
                 itemsIndexed(displayed, key = { _, content -> content.id }) { index, content ->
-                    val rank = ranks[content.id]
-                    val visibleIndex = queued.indexOfFirst { it.id == content.id }
-                    QueueEpisodeRow(
-                        content = content,
-                        rank = rank,
-                        queueSize = playbackQueue.size,
-                        current = content.id == currentContentId,
-                        isPlaying = isPlaying,
-                        canPlay = canPlay,
-                        editing = editing && rank != null,
-                        canMoveUp = canReorder && visibleIndex > 0,
-                        canMoveDown = canReorder && visibleIndex >= 0 && visibleIndex < queued.lastIndex,
-                        onPlay = { onPlay(displayed, index) },
-                        onMoveUp = {
-                            if (rank != null && visibleIndex > 0)
-                                onMoveItem(rank, ranks.getValue(queued[visibleIndex - 1].id))
-                        },
-                        onMoveDown = {
-                            if (rank != null && visibleIndex >= 0 && visibleIndex < queued.lastIndex)
-                                onMoveItem(rank, ranks.getValue(queued[visibleIndex + 1].id))
-                        }
-                    )
+                    val group = if (content.id in ranks) queued else unqueued
+                    val groupIndex = group.indexOfFirst { it.id == content.id }
+                    val movable = if (content.id in ranks) canReorder else canPlay
+                    QueueEpisodeRow(content, ranks[content.id], content.id == currentContentId, isPlaying,
+                        canPlay, movable && groupIndex > 0, movable && groupIndex < group.lastIndex,
+                        { onPlay(displayed, index) }, { move(content, groupIndex - 1) },
+                        { move(content, groupIndex + 1) }, { move(content, 0) },
+                        { move(content, group.lastIndex) })
                 }
             }
         }
+        Text("오른쪽 핸들을 끌거나 눌러 재생 순서를 바꿀 수 있어요.",
+            Modifier.padding(bottom = 12.dp), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
     }
 }
 
-/** 순위 색상은 실제 큐 위치로 계산하며 색을 구분하지 못해도 번호로 확인할 수 있다. */
 @Composable
 private fun QueueEpisodeRow(
-    content: AudioContent,
-    rank: Int?,
-    queueSize: Int,
-    current: Boolean,
-    isPlaying: Boolean,
-    canPlay: Boolean,
-    editing: Boolean,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
-    onPlay: () -> Unit,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit
+    content: AudioContent, rank: Int?, current: Boolean, isPlaying: Boolean, canPlay: Boolean,
+    canMoveUp: Boolean, canMoveDown: Boolean, onPlay: () -> Unit,
+    onMoveUp: () -> Unit, onMoveDown: () -> Unit, onMoveFirst: () -> Unit, onMoveLast: () -> Unit
 ) {
-    val color = if (rank == null) Color(0xFFF0F0EE) else lerp(
-        Color(0xFFFFF4E1), Color(0xFFAAA08F),
-        if (queueSize <= 1) 0f else rank.toFloat() / (queueSize - 1)
-    )
-    Surface(
-        modifier = Modifier.fillMaxWidth().semantics {
+    var menu by remember { mutableStateOf(false) }
+    var dragging by remember { mutableStateOf(false) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    var height by remember { mutableIntStateOf(1) }
+    val up by rememberUpdatedState(onMoveUp)
+    val down by rememberUpdatedState(onMoveDown)
+    val upAllowed by rememberUpdatedState(canMoveUp)
+    val downAllowed by rememberUpdatedState(canMoveDown)
+    val movable = canMoveUp || canMoveDown
+    Row(Modifier.fillMaxWidth().onSizeChanged { height = it.height }
+        .zIndex(if (dragging) 1f else 0f)
+        .graphicsLayer { translationY = dragOffset },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Surface(Modifier.weight(1f).semantics {
             stateDescription = if (rank == null) "재생 목록에 없음" else "재생 순서 ${rank + 1}"
-        },
-        shape = RoundedCornerShape(16.dp),
-        color = color,
-        contentColor = Color(0xFF262624),
-        border = if (current) BorderStroke(2.dp, Color(0xFF786B51)) else null
-    ) {
-        Column {
+        }, shape = RoundedCornerShape(12.dp), color = Color.White,
+            border = BorderStroke(if (current) 2.dp else 1.dp,
+                if (current) Color(0xFF786B51) else Color(0xFFE3E4E7))) {
             Row(Modifier.fillMaxWidth().clickable(enabled = canPlay, onClick = onPlay).padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                CoverArt(Modifier.size(56.dp))
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (rank != null) {
-                        Text("${rank + 1}번째${if (current) {
-                            if (isPlaying) " · 재생 중" else " · 현재 항목"
-                        } else ""}", style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold)
-                    }
-                    Text(content.title, fontWeight = FontWeight.SemiBold)
+                horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                EpisodeArtwork(content, Modifier.size(56.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(content.title, fontWeight = FontWeight.SemiBold, maxLines = 2,
+                        overflow = TextOverflow.Ellipsis)
                     Text("${content.category} · 약 ${content.estimatedSeconds}초",
-                        style = MaterialTheme.typography.bodySmall)
-                    content.credit?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
+                        style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+                    content.credit?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Color.Gray) }
+                    if (current) Text(if (isPlaying) "재생 중" else "현재 항목",
+                        style = MaterialTheme.typography.labelSmall)
                 }
-                TextButton(onClick = onPlay, enabled = canPlay) { Text("듣기") }
             }
-            if (editing) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onMoveUp, enabled = canMoveUp,
-                        modifier = Modifier.heightIn(min = 48.dp).semantics {
-                            contentDescription = "${content.title} 위로 이동"
-                        }) { Text("↑ 위로") }
-                    TextButton(onClick = onMoveDown, enabled = canMoveDown,
-                        modifier = Modifier.heightIn(min = 48.dp).semantics {
-                            contentDescription = "${content.title} 아래로 이동"
-                        }) { Text("↓ 아래로") }
-                }
+        }
+        Box {
+            IconButton(onClick = { menu = true }, enabled = movable, modifier = Modifier.size(48.dp)
+                .pointerInput(content.id, movable) {
+                    if (movable) detectDragGestures(
+                        onDragStart = { dragging = true; menu = false },
+                        onDragEnd = { dragging = false; dragOffset = 0f },
+                        onDragCancel = { dragging = false; dragOffset = 0f }
+                    ) { change, amount ->
+                        change.consume()
+                        dragOffset += amount.y
+                        if (dragOffset > height * 0.6f && downAllowed) {
+                            down(); dragOffset -= height
+                        } else if (dragOffset < -height * 0.6f && upAllowed) {
+                            up(); dragOffset += height
+                        }
+                    }
+                }.semantics { contentDescription = "${content.title} 순서 이동" }) {
+                Image(painterResource(R.drawable.ic_dragle_handle), null, Modifier.size(40.dp))
+            }
+            DropdownMenu(expanded = menu && movable, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text("맨 위로") }, enabled = canMoveUp,
+                    onClick = { menu = false; onMoveFirst() })
+                DropdownMenuItem(text = { Text("위로") }, enabled = canMoveUp,
+                    onClick = { menu = false; onMoveUp() })
+                DropdownMenuItem(text = { Text("아래로") }, enabled = canMoveDown,
+                    onClick = { menu = false; onMoveDown() })
+                DropdownMenuItem(text = { Text("맨 아래로") }, enabled = canMoveDown,
+                    onClick = { menu = false; onMoveLast() })
             }
         }
     }
@@ -220,13 +212,10 @@ private fun QueueEpisodeRow(
 
 @Composable
 private fun CollectionTab(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    if (selected) {
-        Button(onClick = onClick, modifier = modifier, contentPadding = PaddingValues(horizontal = 4.dp)) {
-            Text(label, maxLines = 1, style = MaterialTheme.typography.labelMedium)
-        }
-    } else {
-        OutlinedButton(onClick = onClick, modifier = modifier, contentPadding = PaddingValues(horizontal = 4.dp)) {
-            Text(label, maxLines = 1, style = MaterialTheme.typography.labelMedium)
-        }
+    if (selected) Button(onClick = onClick, modifier = modifier, contentPadding = PaddingValues(horizontal = 4.dp)) {
+        Text(label, maxLines = 1, style = MaterialTheme.typography.labelMedium)
+    } else OutlinedButton(onClick = onClick, modifier = modifier, contentPadding = PaddingValues(horizontal = 4.dp),
+        colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White)) {
+        Text(label, maxLines = 1, style = MaterialTheme.typography.labelMedium)
     }
 }

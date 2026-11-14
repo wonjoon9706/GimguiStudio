@@ -31,34 +31,31 @@ fun TripFinishedScreen(state: TripHistoryState, onLater: () -> Unit, modifier: M
     val eligible = state.quizContentCount
     Column(modifier.padding(20.dp).verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("POTQUEST", Modifier.fillMaxWidth(), style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold)
-        HorizontalDivider(Modifier.padding(vertical = 16.dp))
-        Text("주행을 마쳤어요", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(16.dp))
-        Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.primary) {
-            Text("P · 주차 상태 확인 완료", Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-                color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.labelLarge)
-        }
+        AppHeader(status = if (state.parked) AppHeaderStatus.PARKED else AppHeaderStatus.UNKNOWN)
+        Text("주행을 마쳤어요", Modifier.fillMaxWidth().padding(top = 16.dp),
+            textAlign = TextAlign.Start, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(28.dp))
-        Image(painterResource(R.drawable.pot_placeholder), "나의 항아리",
+        Image(painterResource(R.drawable.pot), "나의 항아리",
             Modifier.sizeIn(maxWidth = 240.dp, maxHeight = 240.dp).size(200.dp))
         Text("나의 항아리", Modifier.padding(top = 12.dp), fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.titleMedium)
         Text("이번 운행에서 ${state.completedContentCount}개의 콘텐츠를 청취 완료했어요",
             Modifier.padding(top = 16.dp), textAlign = TextAlign.Center)
         Text(if (eligible > 0) "퀴즈에 사용할 대본 ${eligible}개가 준비됐어요"
-            else "누적 80% 이상 들은 대본이 아직 없어요",
+            else if (state.completedContentCount > 0) "완료한 콘텐츠에 퀴즈용 대본이 없어요"
+            else "아직 누적 80% 이상 청취 완료한 콘텐츠가 없어요",
             Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall,
             textAlign = TextAlign.Center)
         Spacer(Modifier.height(32.dp))
-        Button(onClick = onQuiz, enabled = eligible > 0, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-            Text("퀴즈로 음악 완성하기")
+        if (eligible > 0) {
+            Button(onClick = onQuiz, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                Text("퀴즈로 음악 완성하기")
+            }
+            Text("선택하면 대본을 서버로 보내 문제를 준비해요", Modifier.padding(vertical = 8.dp),
+                style = MaterialTheme.typography.bodySmall)
         }
-        Text("선택하면 대본을 서버로 보내 문제를 준비해요", Modifier.padding(vertical = 8.dp),
-            style = MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick = onLater, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-            Text("나중에 하기")
+            Text(if (eligible > 0) "나중에 하기" else "홈으로")
         }
         Text("주차 상태가 해제되면 이 화면은 자동으로 닫혀요",
             Modifier.padding(top = 12.dp, bottom = 8.dp), style = MaterialTheme.typography.bodySmall,

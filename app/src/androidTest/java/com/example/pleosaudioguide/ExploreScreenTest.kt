@@ -27,7 +27,7 @@ class ExploreScreenTest {
         compose.onNodeWithText("⌕  프로그램, 에피소드, 주제를 검색").performScrollTo().performClick()
         compose.onNodeWithText("프로그램, 에피소드, 주제를 검색").performTextInput("불국사")
         compose.onNodeWithText("검색 결과 · 1개").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("듣기").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("듣기").performScrollTo().performClick()
         compose.runOnIdle {
             assertEquals(listOf("bulguksa"), played.map { it.id })
             assertEquals(0, index)

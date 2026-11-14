@@ -16,9 +16,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.pleosaudioguide.AudioContent
 
 /** 화면은 SDK/ViewModel을 참조하지 않고 데이터와 사용자 동작만 전달받는다. */
@@ -28,11 +29,8 @@ fun HomeScreen(
     destinationStatus: String,
     recommendations: List<AudioContent>,
     episodes: List<AudioContent>,
-    resumeContent: AudioContent?,
-    canPlay: Boolean,
     canRefresh: Boolean,
     onRefresh: () -> Unit,
-    onResume: () -> Unit,
     onOpenCollection: (ContentCollection) -> Unit,
     modifier: Modifier = Modifier,
     onlineStatus: String? = null
@@ -40,10 +38,7 @@ fun HomeScreen(
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(28.dp)) {
         item {
-            Column(Modifier.padding(horizontal = 24.dp)) {
-                Text("POTQUEST", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-                HorizontalDivider(Modifier.padding(top = 16.dp))
-            }
+            AppHeader(Modifier.padding(horizontal = 24.dp))
         }
         item {
             SectionHeading("목적지 기반 팟캐스트 추천",
@@ -72,25 +67,6 @@ fun HomeScreen(
                 }
             }
         }
-        if (resumeContent != null) {
-            item {
-                SectionHeading("이어서 듣기", "지난번에 듣던 이야기를 다시 만나보세요")
-                Surface(Modifier.padding(horizontal = 24.dp).fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp), color = Color(0xFFF0F0EE)) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        CoverArt(Modifier.size(80.dp))
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(resumeContent.title, fontWeight = FontWeight.Bold)
-                            Text(resumeContent.category, style = MaterialTheme.typography.bodySmall)
-                            Button(onClick = onResume, enabled = canPlay) {
-                                Text(if (resumeContent.audioUri == null) "처음부터 다시 듣기" else "이어서 듣기")
-                            }
-                        }
-                    }
-                }
-            }
-        }
         item {
             SectionHeading("오늘의 퀘스트", "이동 시간을 배움의 시간으로",
                 onClick = { onOpenCollection(ContentCollection.COMMUTE) })
@@ -104,11 +80,15 @@ fun HomeScreen(
             }
         }
         item {
-            SectionHeading("추천 에피소드", "오늘 함께 들을 짧은 이야기 · 시연 콘텐츠",
+            SectionHeading("추천 에피소드", "함께 듣기 좋은 이야기",
                 onClick = { onOpenCollection(ContentCollection.RECOMMENDED) })
         }
+        if (episodes.isEmpty()) item {
+            Text("아직 불러온 오디오가 없어요. 오디오를 불러오면 추천이 표시돼요.",
+                Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodyMedium)
+        }
         items(episodes, key = { it.id }) { content ->
-            EpisodeRow(content, true, Modifier.padding(horizontal = 24.dp), actionLabel = "목록 보기") {
+            EpisodeRow(content, true, Modifier.padding(horizontal = 24.dp), actionLabel = null) {
                 onOpenCollection(ContentCollection.RECOMMENDED)
             }
         }
@@ -122,7 +102,6 @@ private fun SectionHeading(title: String, subtitle: String, onClick: (() -> Unit
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(title, Modifier.weight(1f).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
                 style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            if (onClick != null) TextButton(onClick = onClick) { Text("전체 보기") }
         }
         Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = Color.DarkGray)
     }
@@ -151,27 +130,31 @@ private fun EpisodeTile(content: AudioContent, modifier: Modifier, onClick: () -
     Surface(modifier, shape = RoundedCornerShape(16.dp), color = Color(0xFFF0F0EE)) {
         Column(Modifier.clickable(onClick = onClick).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            CoverArt(Modifier.fillMaxWidth().height(120.dp))
+            EpisodeArtwork(content, Modifier.fillMaxWidth().height(120.dp))
             Text(content.title, fontWeight = FontWeight.Bold, minLines = 2)
             Text("${content.category} · 약 ${content.estimatedSeconds}초", style = MaterialTheme.typography.bodySmall)
             content.credit?.let { Text("출처: $it", style = MaterialTheme.typography.labelSmall, color = Color.Gray) }
-            TextButton(onClick = onClick) { Text("목록 보기  ›") }
         }
     }
 }
 
 @Composable
 fun EpisodeRow(content: AudioContent, enabled: Boolean, modifier: Modifier = Modifier,
-    actionLabel: String = "듣기", onClick: () -> Unit) {
+    actionLabel: String? = "듣기", onClick: () -> Unit) {
     Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = Color(0xFFF0F0EE)) {
         Row(Modifier.clickable(enabled = enabled, onClick = onClick).padding(16.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            CoverArt(Modifier.size(64.dp))
+            EpisodeArtwork(content, Modifier.size(64.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(content.title, fontWeight = FontWeight.SemiBold)
                 Text("${content.category} · 약 ${content.estimatedSeconds}초", style = MaterialTheme.typography.bodySmall)
             }
-            TextButton(onClick = onClick, enabled = enabled) { Text(actionLabel) }
+            actionLabel?.let { label ->
+                IconButton(onClick = onClick, enabled = enabled,
+                    modifier = Modifier.size(48.dp).semantics { contentDescription = label }) {
+                    TransportGlyph("play", Modifier.size(28.dp))
+                }
+            }
         }
     }
 }

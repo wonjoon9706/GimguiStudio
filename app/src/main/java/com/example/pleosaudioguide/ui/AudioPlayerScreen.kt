@@ -1,6 +1,5 @@
 package com.example.pleosaudioguide.ui
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -12,10 +11,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -57,11 +52,10 @@ fun AudioPlayerScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) { Text("‹ 홈으로") }
-                Text("지금 듣는 이야기", Modifier.weight(1f), textAlign = TextAlign.End,
-                    style = MaterialTheme.typography.titleMedium)
-            }
+            AppHeader()
+            TextButton(onClick = onBack, modifier = Modifier.align(Alignment.Start).heightIn(min = 48.dp)) { Text("‹ 홈으로") }
+            Text("지금 듣는 이야기", Modifier.fillMaxWidth(), textAlign = TextAlign.Start,
+                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             if (current == null) {
                 Spacer(Modifier.height(24.dp))
                 CoverArt(Modifier.size(148.dp))
@@ -111,15 +105,11 @@ fun AudioPlayerScreen(
                             },
                             shape = CircleShape
                         ) {
-                            if (preparing) CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
+                            if (preparing) CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp, color = LocalContentColor.current)
                             else TransportGlyph(if (isPlaying) {
                                 if (usingPleosVoice) "stop" else "pause"
                             } else "play", Modifier.size(36.dp))
                         }
-                        Text(if (preparing) "준비 중" else if (isPlaying) {
-                            if (usingPleosVoice) "중지" else "일시정지"
-                        } else if (usingPleosVoice) "처음부터 재생" else "재생",
-                            style = MaterialTheme.typography.labelMedium)
                     }
                     Seek30Button(true, canSeek && !preparing) { onSeek30(true) }
                 }
@@ -141,12 +131,28 @@ fun AudioPlayerScreen(
 
 /** 사용자 드래그만 선택 명령으로 전달한다. 화면 진입·자동 다음 곡·큐 재배열의 스크롤은 명령을 보내지 않는다. */
 @Composable
-private fun ArtworkCarousel(
+internal fun ArtworkCarousel(
     queue: List<AudioContent>,
     currentId: String,
     enabled: Boolean,
     onSelect: (String) -> Unit,
     modifier: Modifier
+) {
+    if (queue.isEmpty()) {
+        CoverArt(modifier)
+        return
+    }
+    // 후보가 줄거나 ID 순서가 바뀌면 이전 Pager의 페이지/키 캐시를 재사용하지 않는다.
+    val snapshot = queue.toList()
+    key(snapshot.map { it.id }) {
+        ArtworkCarouselPages(snapshot, currentId, enabled, onSelect, modifier)
+    }
+}
+
+@Composable
+private fun ArtworkCarouselPages(
+    queue: List<AudioContent>, currentId: String, enabled: Boolean,
+    onSelect: (String) -> Unit, modifier: Modifier
 ) {
     val currentIndex = queue.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
     val pager = rememberPagerState(initialPage = currentIndex, pageCount = { queue.size })
@@ -194,7 +200,7 @@ private fun ArtworkCarousel(
 }
 
 @Composable
-private fun Seek30Button(forward: Boolean, enabled: Boolean, onClick: () -> Unit) {
+internal fun Seek30Button(forward: Boolean, enabled: Boolean, onClick: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         OutlinedIconButton(
             onClick = onClick, enabled = enabled,
@@ -208,39 +214,6 @@ private fun Seek30Button(forward: Boolean, enabled: Boolean, onClick: () -> Unit
             }
         }
         Text(if (forward) "30초 앞으로" else "30초 뒤로", style = MaterialTheme.typography.labelMedium)
-    }
-}
-
-@Composable
-private fun TransportGlyph(kind: String, modifier: Modifier) {
-    val color = LocalContentColor.current
-    Canvas(modifier) {
-        val w = size.width
-        val h = size.height
-        when (kind) {
-            "play" -> drawPath(Path().apply {
-                moveTo(w * .28f, h * .15f); lineTo(w * .82f, h * .5f)
-                lineTo(w * .28f, h * .85f); close()
-            }, color)
-            "pause" -> {
-                drawRect(color, Offset(w * .22f, h * .15f), Size(w * .18f, h * .7f))
-                drawRect(color, Offset(w * .6f, h * .15f), Size(w * .18f, h * .7f))
-            }
-            "stop" -> drawRect(color, Offset(w * .2f, h * .2f), Size(w * .6f, h * .6f))
-            else -> {
-                val forward = kind == "forward"
-                drawArc(color, -65f, 300f, false, Offset(w * .12f, h * .12f),
-                    Size(w * .76f, h * .76f), style = Stroke(width = 2.dp.toPx()))
-                drawPath(Path().apply {
-                    if (forward) {
-                        moveTo(w * .65f, 0f); lineTo(w * .85f, h * .2f); lineTo(w * .59f, h * .24f)
-                    } else {
-                        moveTo(w * .35f, 0f); lineTo(w * .15f, h * .2f); lineTo(w * .41f, h * .24f)
-                    }
-                    close()
-                }, color)
-            }
-        }
     }
 }
 
