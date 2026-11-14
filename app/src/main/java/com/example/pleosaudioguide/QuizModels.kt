@@ -38,6 +38,17 @@ object QuizRules {
     }
     fun estimatedSeconds(count: Int) = count * 30
     fun normalize(text: String) = text.replace(Regex("\\s+"), " ").trim()
+    private fun evidenceText(text: String): String {
+        val compact = java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFKC)
+            .replace(Regex("[\\p{Z}\\s]"), "")
+        return Regex("\\p{P}").replace(compact) { match ->
+            val index = match.range.first
+            val mark = match.value
+            val before = compact.getOrNull(index - 1)?.isDigit() == true
+            val after = compact.getOrNull(index + 1)?.isDigit() == true
+            if ((mark == "-" && after) || (mark in listOf(".", ",", ":") && before && after)) mark else ""
+        }
+    }
     fun sources(records: List<ListeningRecord>): List<QuizSource> = records
         .filter { it.canUseFullScriptForQuiz }.sortedByDescending { it.lastListenedAt }
         .distinctBy { it.contentId }.mapNotNull {
@@ -58,8 +69,8 @@ object QuizRules {
                 q.options.map(::normalize).distinct().size == 3 && q.correctIndex in 0..2)
             require(q.explanation.isNotBlank() && q.explanation.length <= 1500)
             val evidence = normalize(q.evidence)
-            require(evidence.length in 8..600 && normalize(source.script).contains(evidence) &&
-                evidence.contains(normalize(q.options[q.correctIndex]))) {
+            require(evidence.length in 2..600 && evidenceText(evidence).length >= 2 &&
+                evidenceText(source.script).contains(evidenceText(evidence))) {
                 "대본에서 정답 근거를 확인하지 못했어요."
             }
         }

@@ -45,6 +45,7 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
     val navigation by model.navigationState.collectAsState()
     val tripState by model.tripHistoryState.collectAsState()
     val quizState by model.quiz.state.collectAsState()
+    val libraryState by model.libraryState.collectAsState()
     val drivingMode = !tripState.browsingAllowed
     val canPlay = model.voiceReady && model.playerReady && !model.preparing &&
         !(model.usingPleosVoice && model.isPlaying)
@@ -197,7 +198,7 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
                         },
                         modifier = screenModifier
                     )
-                    AppTab.LIBRARY -> ComingSoonScreen("보관함", "저장한 에피소드를 모아볼 공간이에요.", screenModifier)
+                    AppTab.LIBRARY -> LibraryScreen(libraryState, screenModifier)
                     AppTab.MY_POT -> Column(screenModifier.padding(24.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text("MY POT", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)

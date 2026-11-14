@@ -41,8 +41,20 @@ class QuizTest {
         assertTrue(runCatching { QuizRules.validate(List(3) { valid.first() }, 3, sources) }.isFailure)
         assertTrue(runCatching { QuizRules.validate(valid.map { it.copy(sourceId = "other-trip") }, 3, sources) }.isFailure)
         assertTrue(runCatching { QuizRules.validate(valid.map { it.copy(evidence = "대본에 존재하지 않는 거짓 근거입니다.") }, 3, sources) }.isFailure)
-        assertTrue(runCatching { QuizRules.validate(valid.map { it.copy(correctIndex = 1) }, 3, sources) }.isFailure)
+        assertTrue(runCatching { QuizRules.validate(valid.map { it.copy(correctIndex = 3) }, 3, sources) }.isFailure)
     }
+    @Test fun lightEvidenceAllowsParaphrasedOptionsShortQuotesAndFormattingDifferences() {
+        val q = questions(1).single().copy(options = listOf("경주시", "서울", "부산"),
+            evidence = "경주")
+        QuizRules.validate(listOf(q), 1, sources)
+        QuizRules.validate(listOf(q.copy(evidence = "불국사는  경주에 있는 사찰입니다!")), 1, sources)
+        assertTrue(runCatching { QuizRules.validate(listOf(q.copy(evidence = "!!!")), 1, sources) }.isFailure)
+        assertTrue(runCatching { QuizRules.validate(listOf(q.copy(evidence = "제주")), 1, sources) }.isFailure)
+        val numeric = listOf(sources.single().copy(script = "거리는 1.5km이고 기온은 -5도입니다."))
+        assertTrue(runCatching { QuizRules.validate(listOf(q.copy(evidence = "15km")), 1, numeric) }.isFailure)
+
+    }
+
     @Test fun partialOrEmptyScriptIsNotSentAndVersionIsStable() {
         assertTrue(QuizRules.sources(listOf(record.copy(narrationCompleted = false))).isEmpty())
         assertTrue(QuizRules.sources(listOf(record.copy(script = " <p> </p> "))).isEmpty())

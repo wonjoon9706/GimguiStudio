@@ -46,6 +46,10 @@ interface ListeningDao {
     @Query("SELECT * FROM trips WHERE id = :id") fun trip(id: String): TripEntity?
     @Query("SELECT * FROM quiz_attempts WHERE `key` = :key") fun quiz(key: String): QuizAttemptEntity?
     @Upsert fun saveQuiz(attempt: QuizAttemptEntity)
+    @Query("SELECT * FROM library_completion ORDER BY completedAt DESC, `key`")
+    fun libraryEntries(): List<LibraryCompletionEntity>
+    @Insert(onConflict = OnConflictStrategy.IGNORE) fun insertCompletion(entry: LibraryCompletionEntity)
+    @Query("SELECT * FROM quiz_attempts ORDER BY updatedAt DESC") fun allQuizzes(): List<QuizAttemptEntity>
 }
 
 @Entity(tableName = "quiz_attempts", foreignKeys = [
@@ -56,8 +60,20 @@ data class QuizAttemptEntity(
     val payload: String, val updatedAt: Long
 )
 
-@Database(entities = [TripEntity::class, ListeningEntity::class, HistoryMeta::class, QuizAttemptEntity::class],
-    version = 2, exportSchema = true, autoMigrations = [AutoMigration(from = 1, to = 2)])
+/** 동일 콘텐츠/대본/방식의 최초 완료 시각과 귀속을 보존한다. 재청취로 덮어쓰지 않는다. */
+@Entity(tableName = "library_completion", indices = [Index("sessionId")])
+data class LibraryCompletionEntity(
+    @PrimaryKey val key: String,
+    val sessionId: String,
+    val tripId: String?,
+    val completedAt: Long,
+    val recordPayload: String,
+    val potionName: String,
+    val inferred: Boolean
+)
+
+@Database(entities = [TripEntity::class, ListeningEntity::class, HistoryMeta::class, QuizAttemptEntity::class, LibraryCompletionEntity::class],
+    version = 3, exportSchema = true, autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)])
 abstract class ListeningDatabase : RoomDatabase() {
     abstract fun history(): ListeningDao
 }

@@ -66,13 +66,13 @@ test('unsupported counts, duplicate sources and empty scripts are rejected befor
   ]) assert.throws(() => validateInput(invalid));
 });
 
-test('foreign source, invented evidence, wrong grounded answer and duplicate questions fail', () => {
+test('foreign source, invented evidence and invalid answer index fail; duplicate candidates are removed', () => {
   const valid = questions();
   validateQuestions(valid, input);
   for (const invalid of [
     valid.map(q => ({ ...q, sourceId: 'other-trip' })),
     valid.map(q => ({ ...q, evidence: '존재하지 않는 근거를 지어냈습니다.' })),
-    valid.map(q => ({ ...q, correctIndex: 1 })),
+    valid.map(q => ({ ...q, correctIndex: 3 })),
   ]) assert.throws(() => validateQuestions(invalid, input));
   assert.equal(validateQuestions([valid[0], valid[0], valid[2]], input).length, 2);
   assert.equal(validateQuestions(valid.slice(1), input).length, 2);
@@ -97,6 +97,16 @@ test('provider quota errors are reported without exposing raw provider response'
   const response = await post(url);
   assert.equal(response.status, 429);
   assert.deepEqual(await response.json(), { error: 'PROVIDER_ERROR' });
+});
+
+test('light evidence accepts short quotes and paraphrased options but rejects invented evidence', () => {
+  const q = { ...questions()[0], options: ['경주시', '서울', '부산'], evidence: '경주' };
+  assert.equal(validateQuestions([q], input).length, 1);
+  assert.equal(validateQuestions([{ ...q, evidence: '불국사는 경주에 있는 사찰입니다!' }], input).length, 1);
+  assert.throws(() => validateQuestions([{ ...q, evidence: '!!!' }], input));
+  assert.throws(() => validateQuestions([{ ...q, evidence: '제주' }], input));
+  assert.throws(() => validateQuestions([{ ...q, evidence: '15km' }],
+    { ...input, sources: [{ ...source, script: '거리는 1.5km입니다.' }] }));
 });
 
 test('provider schema only admits this request sources and 3 options', () => {

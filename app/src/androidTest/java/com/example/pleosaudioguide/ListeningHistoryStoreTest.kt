@@ -92,7 +92,9 @@ class ListeningHistoryStoreTest {
             store.snapshot().get(5, TimeUnit.SECONDS)
             val state = store.state.value
             assertEquals(4, store.snapshot(state.endedTrip!!.id).get(5, TimeUnit.SECONDS).size)
-            assertEquals(2, state.listenedContentCount)
+            assertEquals(0, state.completedContentCount)
+            // 부분 청취는 raw snapshot에 보존하되 퀴즈/보관함 완료 후보에서 제외한다.
+            assertEquals(0, state.listenedContentCount)
             assertEquals(0, state.quizContentCount)
         } finally { drainAndClose(store); context.deleteDatabase(file.absolutePath) }
     }

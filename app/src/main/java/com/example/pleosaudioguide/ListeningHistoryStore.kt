@@ -15,7 +15,9 @@ import kotlinx.coroutines.flow.asStateFlow
 /** 저장 경계는 유지하고 구현을 Room으로 교체. DB 작업과 차량 이벤트를 단일 큐에서 순서대로 처리한다. */
 class ListeningHistoryStore internal constructor(
     private val database: ListeningDatabase,
-    private val legacyFile: File? = null
+    private val legacyFile: File? = null,
+    private val potionNames: List<String> = listOf("pot_placeholder"),
+    private val clock: () -> Long = { System.currentTimeMillis() }
 ) : QuizStorage {
     private val worker = Executors.newSingleThreadExecutor()
     private val dao get() = database.history()
@@ -47,12 +49,19 @@ class ListeningHistoryStore internal constructor(
     private val ttsStarts = mutableMapOf<String, String>()
     private val mutableState = MutableStateFlow(TripHistoryState())
     val state = mutableState.asStateFlow()
+    private val mutableLibrary = MutableStateFlow(LibraryState())
+    val library = mutableLibrary.asStateFlow()
+    fun refreshLibrary(): CompletableFuture<List<LibraryPotion>> = query {
+        publishLibrary()
+        mutableLibrary.value.potions
+    }
     @Volatile var error: String? = null
         private set
 
     init {
         submit {
             migrateJson()
+            importLibraryHistory()
             active = dao.activeTrip()
             detector = TripDetection(active != null)
             publish()
@@ -82,12 +91,12 @@ class ListeningHistoryStore internal constructor(
         reading = value
         when (detector.update(value, elapsedMs)) {
             TripDetection.Action.START -> {
-                active = TripEntity(UUID.randomUUID().toString(), System.currentTimeMillis())
+                active = TripEntity(UUID.randomUUID().toString(), clock())
                 dao.insertTrip(active!!)
             }
             TripDetection.Action.END -> {
                 active?.let {
-                    val ended = it.copy(endedAt = System.currentTimeMillis())
+                    val ended = it.copy(endedAt = clock())
                     database.runInTransaction {
                         dao.updateTrip(ended)
                         dao.saveMeta(HistoryMeta("trip-completion:v2:" + it.id,
@@ -123,10 +132,45 @@ class ListeningHistoryStore internal constructor(
             title = content.title, credit = content.credit,
             durationMs = durationMs.takeIf { it > 0 } ?: old?.durationMs ?: 0,
             narrationCompleted = completedWithinTrip || old?.narrationCompleted == true,
-            lastListenedAt = System.currentTimeMillis())
+            lastListenedAt = clock())
         if (range != null) next = next.mergeRange(range)
-        save(tripId, next)
+        database.runInTransaction {
+            save(tripId, next)
+            captureCompletion(tripId, next, false)
+        }
         publish()
+    }
+
+    private fun captureCompletion(tripId: String, record: ListeningRecord, inferred: Boolean) {
+        val entries = dao.libraryEntries()
+        val key = recordKey("completion", record.contentId, record.script, record.mode)
+        if (entries.any { it.key == key }) return
+        val cumulative = CumulativeListening.forTrip(listOf(record), decode(dao.allRecords())).singleOrNull() ?: return
+        if (!cumulative.completionEligible) return
+        val drive = dao.trip(tripId)?.kind == "drive"
+        val session = if (drive) tripId else LibraryRules.freeSession(record.lastListenedAt)
+        val image = entries.firstOrNull { it.sessionId == session }?.potionName
+            ?: potionNames.ifEmpty { listOf("pot_placeholder") }.random()
+        dao.insertCompletion(LibraryCompletionEntity(key, session, tripId.takeIf { drive },
+            record.lastListenedAt, ListeningHistoryJson.encode(listOf(cumulative)), image, inferred))
+    }
+
+    private fun importLibraryHistory() {
+        if (dao.meta("library_imported") != null) return
+        database.runInTransaction {
+            // 과거 구간에는 최초 80% 도달 시각이 없다. 마지막 확인 기록임을 별도 표시한다.
+            dao.allRecords().flatMap { row ->
+                ListeningHistoryJson.decode(row.payload).map { row.tripId to it }
+            }.sortedByDescending { it.second.lastListenedAt }.forEach { (trip, record) ->
+                captureCompletion(trip, record, true)
+            }
+            dao.saveMeta(HistoryMeta("library_imported", "1"))
+        }
+    }
+
+    private fun publishLibrary() {
+        mutableLibrary.value = LibraryState(LibraryRules.group(dao.libraryEntries(),
+            dao.allQuizzes().map { QuizJson.decode(it.payload) }))
     }
 
     private fun save(tripId: String, record: ListeningRecord) {
@@ -151,6 +195,7 @@ class ListeningHistoryStore internal constructor(
         QuizRules.validate(attempt.questions, attempt.count, attempt.sources)
         dao.saveQuiz(QuizAttemptEntity("${attempt.tripId}:${attempt.count}", attempt.tripId,
             attempt.count, QuizJson.encode(attempt), System.currentTimeMillis()))
+        publishLibrary()
     }
     fun reopenLatestQuiz(): CompletableFuture<Boolean> = query {
         val trip = dao.latestEndedTrip()
@@ -163,6 +208,7 @@ class ListeningHistoryStore internal constructor(
 
     private fun decode(rows: List<ListeningEntity>) = rows.flatMap { ListeningHistoryJson.decode(it.payload) }
     private fun publish() {
+        publishLibrary()
         val ended = dao.latestEndedTrip()
         val completionRecords = ended?.let { trip ->
             val key = "trip-completion:v2:" + trip.id
@@ -174,8 +220,14 @@ class ListeningHistoryStore internal constructor(
                 records
             }
         }.orEmpty()
+        val ownedKeys = ended?.let { trip ->
+            dao.libraryEntries().filter { it.sessionId == trip.id }.map { it.key }.toSet()
+        }.orEmpty()
+        val ownedRecords = completionRecords.filter {
+            recordKey("completion", it.contentId, it.script, it.mode) in ownedKeys
+        }
         mutableState.value = TripHistoryState(active?.id, ended,
-            completionRecords, reading.parked, reading.error ?: error,
+            ownedRecords, reading.parked, reading.error ?: error,
             browsingAllowed = reading.parked, maxTitleLength = reading.maxStringLength.coerceIn(0, 80),
             permissionPromptAllowed = reading.uxAllowed)
     }
@@ -195,6 +247,7 @@ class ListeningHistoryStore internal constructor(
     }
     private fun report(e: Exception) {
         error = "청취 기록 저장/복원 실패: ${e.javaClass.simpleName}"
+        mutableLibrary.value = mutableLibrary.value.copy(error = error)
         Log.e("ListeningHistory", error, e)
     }
     internal fun close(): CompletableFuture<Unit> {
@@ -211,7 +264,9 @@ class ListeningHistoryStore internal constructor(
         fun get(context: Context): ListeningHistoryStore = instance ?: synchronized(this) {
             instance ?: ListeningHistoryStore(
                 Room.databaseBuilder(context.applicationContext, ListeningDatabase::class.java, "listening.db").build(),
-                File(context.applicationContext.filesDir, "listening_history.json")
+                File(context.applicationContext.filesDir, "listening_history.json"),
+                R.drawable::class.java.fields.map { it.name }.filter { it.startsWith("potion_") }
+                    .ifEmpty { listOf("pot_placeholder") }
             ).also {
                 instance = it
                 if (context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_AUTOMOTIVE))

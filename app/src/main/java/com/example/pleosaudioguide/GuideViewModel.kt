@@ -28,6 +28,7 @@ private fun findContent(id: String?) = ContentCatalog.all.find { it.id == id } ?
 class GuideViewModel(application: Application) : AndroidViewModel(application) {
     private val listeningHistory = ListeningHistoryStore.get(application)
     val tripHistoryState = listeningHistory.state
+    val libraryState = listeningHistory.library
     val quiz = QuizCoordinator(viewModelScope, tripHistoryState, listeningHistory, QuizApi())
     fun dismissTripFinished() {
         quiz.dismiss()
