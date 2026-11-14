@@ -29,6 +29,9 @@ class QuizApi(private val endpoint: String = BuildConfig.QUIZ_API_URL) : QuizGen
                     connection.readTimeout = 110_000
                     connection.doOutput = true
                     connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    if (BuildConfig.QUIZ_ACCESS_TOKEN.isNotBlank()) {
+                        connection.setRequestProperty("Authorization", "Bearer " + BuildConfig.QUIZ_ACCESS_TOKEN)
+                    }
                     connection.outputStream.use { it.write(QuizJson.request(tripId, count, sources).toByteArray(Charsets.UTF_8)) }
                     val status = connection.responseCode
                     if (status !in 200..299) {

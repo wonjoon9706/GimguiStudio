@@ -31,6 +31,10 @@ android {
         val quizUrl = localProperties.getProperty("QUIZ_API_URL", "http://10.0.2.2:8787/quiz")
             .replace("\\", "\\\\").replace("\"", "\\\"")
         buildConfigField("String", "QUIZ_API_URL", "\"$quizUrl\"")
+        // 심사용 공통 토큰은 APK에서 추출 가능. OpenAI 키와 별개이며 서버에서 교체한다.
+        val quizToken = localProperties.getProperty("QUIZ_ACCESS_TOKEN", "")
+            .replace("\\", "\\\\").replace("\"", "\\\"")
+        buildConfigField("String", "QUIZ_ACCESS_TOKEN", "\"$quizToken\"")
     }
 
     buildTypes {

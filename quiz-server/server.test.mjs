@@ -109,6 +109,22 @@ test('light evidence accepts short quotes and paraphrased options but rejects in
     { ...input, sources: [{ ...source, script: '거리는 1.5km입니다.' }] }));
 });
 
+test('unauthorized requests never consume provider calls; generation cap blocks subsequent calls', async t => {
+  let calls = 0;
+  const url = await server(t, { apiKey: 'fixture', accessToken: 'demo-fixture', maxGenerations: 1,
+    fetchImpl: async () => { calls++; return new Response(JSON.stringify(output())); } });
+  assert.equal((await post(url)).status, 401);
+  const authorized = () => fetch(url + '/quiz', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer demo-fixture' },
+    body: JSON.stringify(input)
+  });
+  assert.equal((await authorized()).status, 200);
+  const exhausted = await authorized();
+  assert.equal(exhausted.status, 429);
+  assert.deepEqual(await exhausted.json(), { error: 'GENERATION_LIMIT' });
+  assert.equal(calls, 1);
+});
+
 test('provider schema only admits this request sources and 3 options', () => {
   const request = buildProviderRequest(input, 'test-model');
   const schema = request.text.format.schema.properties.questions.items;

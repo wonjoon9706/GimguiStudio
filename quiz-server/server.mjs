@@ -100,12 +100,16 @@ function reply(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-/** 로컬 에뮬레이터용. 외부 인터페이스에는 바인딩하지 않으며 키/대본/응답을 로그로 남기지 않는다. */
+/** 기본은 로컬 전용. 클라우드는 HOST=0.0.0.0과 HTTPS 프록시를 사용한다. */
 export function createQuizServer({
   apiKey = process.env.OPENAI_API_KEY,
   model = process.env.OPENAI_MODEL || 'gpt-4.1-mini',
+  accessToken = process.env.QUIZ_ACCESS_TOKEN || '',
+  maxGenerations = Number(process.env.MAX_GENERATIONS || 100),
   fetchImpl = globalThis.fetch
 } = {}) {
+  if (!Number.isInteger(maxGenerations) || maxGenerations < 1) throw new Error('INVALID_GENERATION_LIMIT');
+  let generations = 0; // Per process: restarts reset this emergency cap.
   let busy = false;
   return createServer(async (req, res) => {
     if (req.url === '/health' && req.method === 'GET') {
@@ -113,6 +117,9 @@ export function createQuizServer({
     }
     if (req.url !== '/quiz') { reply(res, 404, { error: 'NOT_FOUND' }); return; }
     if (req.method !== 'POST') { reply(res, 405, { error: 'METHOD_NOT_ALLOWED' }); return; }
+    if (accessToken && req.headers.authorization !== 'Bearer ' + accessToken) {
+      reply(res, 401, { error: 'UNAUTHORIZED' }); return;
+    }
     if (req.headers.origin || !req.headers['content-type']?.startsWith('application/json')) {
       reply(res, 415, { error: 'JSON_CLIENT_REQUIRED' }); return;
     }
@@ -124,6 +131,8 @@ export function createQuizServer({
       const input = validateInput(await readBody(req));
       if (!apiKey) fail(503, 'SERVER_NOT_CONFIGURED');
       if (busy) fail(429, 'BUSY');
+      if (generations >= maxGenerations) fail(429, 'GENERATION_LIMIT');
+      generations++;
       busy = true; acquired = true;
       const timeout = setTimeout(() => abort.abort(), 90000);
       let provider;
@@ -153,6 +162,10 @@ export function createQuizServer({
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const port = Number(process.env.PORT || 8787);
-  createQuizServer().listen(port, '127.0.0.1', () =>
-    console.log('POTQUEST quiz server: http://127.0.0.1:' + port));
+  const host = process.env.HOST || '127.0.0.1';
+  if (host !== '127.0.0.1' && !process.env.QUIZ_ACCESS_TOKEN) {
+    throw new Error('QUIZ_ACCESS_TOKEN is required for external binding');
+  }
+  createQuizServer().listen(port, host, () =>
+    console.log('POTQUEST quiz server listening on port ' + port));
 }
