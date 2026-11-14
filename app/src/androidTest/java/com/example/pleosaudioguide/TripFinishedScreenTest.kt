@@ -20,9 +20,9 @@ class TripFinishedScreenTest {
         val state = TripHistoryState(endedTrip = TripEntity("trip", 1, 2), parked = true,
             records = listOf(a, a.copy(script = "수정 원고"), b))
         compose.setContent { MaterialTheme { TripFinishedScreen(state, {}) } }
-        compose.onNodeWithText("이번 운행에서 1개의 콘텐츠를 청취 완료했어요").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("이번 운행에서 2개의 콘텐츠를 청취 완료했어요").assertDoesNotExist()
-        compose.onNodeWithText("퀴즈로 음악 완성하기").performScrollTo().assertIsEnabled()
+        compose.onNodeWithText("청취한 1개 에피소드에서\n학습재료를 준비했어요").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("청취한 2개 에피소드에서\n학습재료를 준비했어요").assertDoesNotExist()
+        compose.onNodeWithText("퀴즈 물약 완성하기").performScrollTo().assertIsEnabled()
     }
 
     @Test fun jarAndLaterButtonAreAccessibleOnSmallScreen() {
@@ -32,8 +32,8 @@ class TripFinishedScreenTest {
             MaterialTheme { TripFinishedScreen(state, { later = true }, Modifier.requiredSize(320.dp, 480.dp)) }
         }
         compose.onNodeWithText("주행을 마쳤어요").assertIsDisplayed()
-        compose.onNodeWithContentDescription("나의 항아리").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("퀴즈로 음악 완성하기").assertDoesNotExist()
+        compose.onNodeWithContentDescription("학습 재료 항아리").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("퀴즈 물약 완성하기").assertDoesNotExist()
         compose.onNodeWithText("선택하면 대본을 서버로 보내 문제를 준비해요").assertDoesNotExist()
         compose.onNodeWithText("홈으로").performScrollTo().performClick()
         compose.runOnIdle { assertTrue(later) }

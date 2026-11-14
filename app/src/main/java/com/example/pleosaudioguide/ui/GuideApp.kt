@@ -78,7 +78,7 @@ fun GuideApp(model: GuideViewModel = viewModel()) {
         secondaryContainer = Color(0xFFE3E3DF), onSecondaryContainer = Color(0xFF222220),
         background = Color(0xFFFAFAF8), surface = Color(0xFFFAFAF8),
         surfaceVariant = Color(0xFFF0F0EE), onSurface = Color(0xFF262624)
-    )) {
+    ), typography = com.example.pleosaudioguide.ui.theme.Typography) {
         if (!tripState.showEndScreen && (tripState.browsingAllowed || tripState.vehicleDataValid)) automaticResume?.let { request ->
             ResumePlaybackDialog(request.saved, { request.choose(true) },
                 { request.choose(false) }, { request.choose(null) },

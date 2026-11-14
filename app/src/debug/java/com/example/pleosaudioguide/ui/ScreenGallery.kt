@@ -65,7 +65,7 @@ fun ScreenGallery(initialScreen: GalleryScreen = GalleryScreen.HOME) {
     var menu by remember { mutableStateOf(false) }
     MaterialTheme(colorScheme = lightColorScheme(primary = Color(0xFF30302E),
         onPrimary = Color.White, background = Color(0xFFFAFAF8), surface = Color(0xFFFAFAF8),
-        surfaceVariant = Color(0xFFF0F0EE))) {
+        surfaceVariant = Color(0xFFF0F0EE)), typography = com.example.pleosaudioguide.ui.theme.Typography) {
         Surface(Modifier.fillMaxSize()) {
             Column {
                 Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -90,6 +90,12 @@ fun ScreenGallery(initialScreen: GalleryScreen = GalleryScreen.HOME) {
             }
         }
     }
+}
+
+@Preview(name = "운행 종료 · 포션 준비", widthDp = 420, heightDp = 820, showBackground = true)
+@Composable
+private fun TripPotionPreview() {
+    ScreenGallery(GalleryScreen.TRIP_END)
 }
 
 @Preview(name = "주행 플레이어 · 작은 창", widthDp = 320, heightDp = 320, showBackground = true)

@@ -33,13 +33,14 @@ fun AppHeader(modifier: Modifier = Modifier, compact: Boolean = false,
     status: AppHeaderStatus = LocalAppHeaderStatus.current) {
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val small = compact || maxWidth < 360.dp
+        val scale = if (compact) 1f else (maxWidth / 420.dp).coerceIn(1f, 1.6f)
         Column {
             Row(Modifier.fillMaxWidth().heightIn(min = if (compact) 40.dp else 68.dp)
                 .padding(vertical = if (compact) 0.dp else 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(if (small) 6.dp else 10.dp)) {
                 Text("POT-QUEST", Modifier.weight(1f),
-                    fontSize = if (compact) 20.sp else if (small) 22.sp else 26.sp,
+                    fontSize = if (compact) 20.sp else if (small) 22.sp else (26 * scale).sp,
                     fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Surface(shape = RoundedCornerShape(20.dp), color = Color.White,
                     border = BorderStroke(1.dp, Color(0xFFE2E3E5))) {
@@ -47,12 +48,12 @@ fun AppHeader(modifier: Modifier = Modifier, compact: Boolean = false,
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Box(Modifier.size(6.dp).background(Color(0xFFFFC548), CircleShape))
-                        Text(status.label, fontSize = if (compact) 10.sp else 11.sp,
+                        Text(status.label, fontSize = if (compact) 10.sp else (11 * scale).sp,
                             color = Color(0xFF30302E), maxLines = 1)
                     }
                 }
                 Image(painterResource(R.drawable.logo), "POTQUEST 로고",
-                    Modifier.size(if (compact) 36.dp else if (small) 48.dp else 56.dp))
+                    Modifier.size(if (compact) 44.dp else if (small) 64.dp else 76.dp * scale))
             }
             HorizontalDivider(color = Color(0xFFDDDEE1))
         }

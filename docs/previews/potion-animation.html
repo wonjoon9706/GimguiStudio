@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>POT-QUEST · 물약 애니메이션 예시</title>
+<style>
+@font-face{font-family:Asta;src:url('../../app/src/main/res/font/asta_sans.ttf')}
+*{box-sizing:border-box}body{margin:0;background:#e7e8ec;font-family:Asta,sans-serif;color:#252525;display:grid;place-items:center;min-height:100vh;padding:16px}
+main{background:#f8f9fb;border-radius:26px;width:min(100%,480px);padding:24px 28px;box-shadow:0 12px 50px #0001}
+header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ddd;padding-bottom:14px;font-size:25px;font-weight:700}header img{width:64px;height:64px}
+.demo{font-size:12px;color:#777;text-align:center;margin:14px 0}h1{text-align:center;font-size:27px;margin:22px 0 8px}.sub{text-align:center;color:#777;font-size:15px;margin:0}
+.stage{position:relative;width:100%;height:330px;overflow:hidden;margin:8px 0 0}
+.pot{position:absolute;width:230px;height:auto;left:50%;bottom:12px;transform:translateX(-50%);z-index:3;animation:pot 6s infinite}
+.orb{position:absolute;left:50%;top:36px;width:38px;height:38px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#fff3bc 0 14%,#ffca65 16% 70%,#f4a92f 100%);box-shadow:0 4px 9px #b7862933;z-index:2;opacity:0;animation:drop 6s infinite;animation-delay:var(--delay)}
+.orb:nth-child(1){--x:-115px;--delay:0s}.orb:nth-child(2){--x:80px;--delay:.7s}.orb:nth-child(3){--x:-55px;--delay:1.4s}
+.foam{position:absolute;width:16px;height:16px;border-radius:50%;background:#fff7cf;left:calc(50% + var(--x));bottom:152px;z-index:4;opacity:0;animation:foam 6s infinite;animation-delay:var(--d)}
+.spark{position:absolute;color:#ffbf3e;font-size:26px;left:calc(50% + var(--x));bottom:var(--y);opacity:0;animation:spark 6s infinite}
+.status{text-align:center;font-size:18px;font-weight:600;margin:12px 0 24px;min-height:28px}
+.progress{height:8px;background:#e9e9e9;border-radius:8px;overflow:hidden;margin:18px 0 8px}.fill{height:100%;background:#ffcf49;transform-origin:left;animation:fill 6s infinite}
+.caption{text-align:center;font-size:13px;color:#888}.button{display:block;width:100%;border:none;border-radius:12px;background:#252525;color:white;padding:17px;font:600 19px Asta,sans-serif;cursor:pointer}.note{text-align:center;font-size:12px;color:#888;line-height:1.6;margin:16px 0 0}
+@keyframes drop{0%,5%{opacity:0;transform:translate(var(--x),-20px) scale(.65)}10%,17%{opacity:1;transform:translate(var(--x),0) scale(1)}32%{opacity:1;transform:translate(-19px,116px) scale(.85)}38%,100%{opacity:0;transform:translate(-19px,155px) scale(.15)}}
+@keyframes pot{0%,22%,38%,100%{transform:translateX(-50%) rotate(0)}26%{transform:translateX(-50%) rotate(-2deg)}30%{transform:translateX(-50%) rotate(2deg)}34%{transform:translateX(-50%) rotate(-1deg)}}
+@keyframes foam{0%,28%{opacity:0;transform:translateY(10px) scale(.4)}35%,46%{opacity:.95;transform:translateY(0) scale(1)}62%{opacity:0;transform:translateY(-44px) scale(.5)}100%{opacity:0}}
+@keyframes spark{0%,60%{opacity:0;transform:scale(.2)}70%,78%{opacity:1;transform:scale(1)}90%,100%{opacity:0;transform:translateY(-18px) scale(.6)}}
+@keyframes fill{0%,5%{transform:scaleX(0)}35%{transform:scaleX(.33)}47%{transform:scaleX(.66)}62%,90%{transform:scaleX(1)}100%{transform:scaleX(0)}}
+@media(prefers-reduced-motion:reduce){.orb,.foam,.spark{animation:none}.pot{animation:none}.fill{animation:none}.note:after{content:' · 기기의 동작 줄이기 설정 적용 중'}}
+</style>
+</head>
+<body>
+<main>
+<header><span>POT-QUEST</span><img src="../../app/src/main/res/drawable/logo.png" alt="로고"></header>
+<p class="demo">애니메이션 시안 · 샘플 3개 · 실제 청취/퀴즈와 연결되지 않음</p>
+<h1>지식 재료를 모았어요</h1><p class="sub">들은 이야기가 물약의 재료로 쏙!</p>
+<div class="stage" aria-hidden="true">
+<div class="orb"></div><div class="orb"></div><div class="orb"></div>
+<img class="pot" src="../../app/src/main/res/drawable/pot.png" alt="">
+<i class="foam" style="--x:-32px;--d:0s"></i><i class="foam" style="--x:-14px;--d:.2s"></i><i class="foam" style="--x:4px;--d:.4s"></i><i class="foam" style="--x:22px;--d:.6s"></i>
+<i class="spark" style="--x:-135px;--y:145px">✦</i><i class="spark" style="--x:112px;--y:185px">✦</i>
+</div>
+<div class="progress"><div class="fill"></div></div>
+<p class="caption">3개 에피소드의 지식 재료 · 6초 반복 예시</p>
+<p class="status">퀴즈 물약을 만들 준비가 됐어요</p>
+<button class="button" onclick="restart()">다시 보기</button>
+<p class="note">구슬 투입 → 냄비 반응 → 거품·반짝임<br>완료된 에피소드가 있을 때 보여줄 연출 예시입니다.</p>
+</main>
+<script>
+function restart(){document.querySelectorAll('.stage,.fill').forEach(e=>{const n=e.cloneNode(true);e.replaceWith(n)})}
+</script>
+</body></html>
